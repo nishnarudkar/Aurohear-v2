@@ -81,6 +81,14 @@ High-precision audio synthesis built on standard Web Audio primitives:
 * **Temporal Randomization (`timing.ts`)**: Uniformly distributed stimulus duration ($1.0\text{--}1.5\text{ s}$) and inter-stimulus interval ($1.5\text{--}3.0\text{ s}$). Enforces $\text{ISI} \ge \text{Tone Duration}$ on every draw to prevent rhythmic anticipation.
 * **Transducer Calibration & Safety Clamping (`calibration.ts`)**: Converts dB HL to linear gain based on headphone profile offsets. Clamps output to hardware ceilings ($\le 90\text{ dB HL}$) and records Quality Control (QC) clamp events.
 
+### 3. Clinical Classification & Uncertainty Modeling (`backend/src/aurohear/services/classification.py`)
+Standards-based diagnostic and probabilistic outcome determination per spec §9:
+* **Averages & Grades**: Pure-Tone Average ($\text{PTA}_4$ 500–4000 Hz) per ear, better-ear WHO (2021) Grade, and BSA 5-frequency descriptors (with No-Response counted as 130 dB HL per BSA).
+* **Masalski Probabilistic Likelihood Model**: Calculates $P(\text{hearing loss}) = \Phi((\text{PTA} + \text{bias} - 20) / \sigma)$ using transducer calibration tier uncertainty bounds ($\sigma_{\text{Tier A}} = 4.5\text{ dB}$, $\sigma_{\text{Tier B}} = 5.4\text{ dB}$, $\sigma_{\text{Tier C}} = 7.6\text{ dB}$).
+* **Categorical Risk Banding**: Low ($P < 0.25$), Medium ($0.25 \le P \le 0.75$), and High ($P > 0.75$).
+* **Mandatory Clinical Overrides**: Automatic escalation to High risk and clinical referral upon asymmetry ($\ge 15\text{ dB}$ PTA difference or $\ge 20\text{ dB}$ across adjacent octaves), No-Response, or possible shadow thresholds ($\ge 40\text{ dB}$ supra-aural, $\ge 55\text{ dB}$ insert).
+* **QUALIND-Informed Retest Invalidation**: Poor QC flags outcome as "Indeterminate — retest required" without masking necessary clinical referrals.
+
 ---
 
 ## Empirical & Statistical Validation
@@ -202,7 +210,8 @@ npm test
 
 - [x] **Phase 1: Hughson–Westlake Engine**: Completed with 1000 Hz familiarisation, ascending reversal stop rule, and ASHA 2005 sequence ([`backend/`](backend/)).
 - [x] **Phase 2: Acoustic Stimulus Synthesis**: Completed with 48 kHz Web Audio engine, zero-crosstalk merger routing, and Hann envelope smoothing ([`frontend/`](frontend/)).
-- [x] **Phase 3: Client State Machine (FSM)**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, and transition audit logging ([`frontend/src/session/`](frontend/src/session/)).
+- [x] **Phase 3: Client State Machine (FSM) & API Adapter**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, transition audit logging, and `ApiSessionClient` ([`frontend/src/session/`](frontend/src/session/), [`frontend/src/api/`](frontend/src/api/)).
+- [x] **Clinical Classification & Probabilistic Uncertainty**: Completed with WHO (2021) grading, BSA (2018) descriptors, Masalski $\sigma$-tier likelihood model, and mandatory clinical referral overrides ([`backend/src/aurohear/services/classification.py`](backend/src/aurohear/services/classification.py)).
 - [ ] **Phase 4: Ambient Noise & Hardware Watchdog**: Ambient room noise gating via `AnalyserNode` and headphone unplug detection.
 - [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
