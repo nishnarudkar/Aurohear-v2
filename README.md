@@ -202,7 +202,7 @@ npm test
 
 - [x] **Phase 1: Hughson–Westlake Engine**: Completed with 1000 Hz familiarisation, ascending reversal stop rule, and ASHA 2005 sequence ([`backend/`](backend/)).
 - [x] **Phase 2: Acoustic Stimulus Synthesis**: Completed with 48 kHz Web Audio engine, zero-crosstalk merger routing, and Hann envelope smoothing ([`frontend/`](frontend/)).
-- [ ] **Phase 3: Client State Machine (FSM)**: XState v5 test runner with response windowing, catch trials, and timeout handling.
+- [x] **Phase 3: Client State Machine (FSM)**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, and transition audit logging ([`frontend/src/session/`](frontend/src/session/)).
 - [ ] **Phase 4: Ambient Noise & Hardware Watchdog**: Ambient room noise gating via `AnalyserNode` and headphone unplug detection.
 - [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
