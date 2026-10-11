@@ -1,0 +1,2144 @@
+{
+  "components": {
+    "schemas": {
+      "AbortReason": {
+        "enum": [
+          "user",
+          "timeouts",
+          "device_change",
+          "noise",
+          "context_suspended",
+          "context_closed",
+          "context_interrupted",
+          "procedure_error",
+          "stimulus_error"
+        ],
+        "title": "AbortReason",
+        "type": "string"
+      },
+      "AbortRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/AbortReason"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "AbortRequest",
+        "type": "object"
+      },
+      "CalibrationInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "calibrated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calibrated At"
+          },
+          "cross_check_250hz_delta_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cross Check 250Hz Delta Db"
+          },
+          "method": {
+            "enum": [
+              "coupler",
+              "model_profile",
+              "biological_1k"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "profile_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Profile Version",
+            "type": "string"
+          },
+          "spread_db": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Db"
+          },
+          "tier": {
+            "enum": [
+              "A",
+              "B",
+              "C"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tier",
+          "method",
+          "profile_version"
+        ],
+        "title": "CalibrationInfo",
+        "type": "object"
+      },
+      "DeviceInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "audio_output_label": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Output Label"
+          },
+          "connection": {
+            "enum": [
+              "wired",
+              "bluetooth",
+              "unknown"
+            ],
+            "title": "Connection",
+            "type": "string"
+          },
+          "headphone_profile_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headphone Profile Id"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "sample_rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Rate"
+          },
+          "transducer_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "circumaural",
+                  "supra_aural",
+                  "insert",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transducer Type"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "connection"
+        ],
+        "title": "DeviceInfo",
+        "type": "object"
+      },
+      "Ear": {
+        "enum": [
+          "right",
+          "left"
+        ],
+        "title": "Ear",
+        "type": "string"
+      },
+      "EnvironmentInfo": {
+        "additionalProperties": false,
+        "properties": {
+          "mpanl_table": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mpanl Table"
+          },
+          "pretest_dba": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretest Dba"
+          },
+          "pretest_third_octave": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pretest Third Octave"
+          },
+          "test_floor_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Floor Db"
+          }
+        },
+        "title": "EnvironmentInfo",
+        "type": "object"
+      },
+      "FeedbackCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BCP-47 tag",
+            "title": "Language"
+          },
+          "ratings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Likert items, each 1–5, e.g. {'clarity': 4}",
+            "title": "Ratings"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 5,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "FeedbackCreate",
+        "type": "object"
+      },
+      "FeedbackOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/NlpInsightOut"
+            },
+            "title": "Insights",
+            "type": "array"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "ratings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ratings"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "text",
+          "ratings",
+          "language",
+          "submitted_at",
+          "insights"
+        ],
+        "title": "FeedbackOut",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Issue": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "type": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "severity"
+        ],
+        "title": "Issue",
+        "type": "object"
+      },
+      "NlpInsightCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "emotions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Emotions",
+            "type": "object"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "enum": [
+                  "complaint",
+                  "suggestion",
+                  "praise",
+                  "question"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "model_name": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Model Version",
+            "type": "string"
+          },
+          "sentiment": {
+            "enum": [
+              "positive",
+              "negative",
+              "neutral",
+              "mixed"
+            ],
+            "title": "Sentiment",
+            "type": "string"
+          },
+          "uncertainty": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Uncertainty",
+            "type": "number"
+          }
+        },
+        "required": [
+          "model_name",
+          "model_version",
+          "sentiment",
+          "uncertainty"
+        ],
+        "title": "NlpInsightCreate",
+        "type": "object"
+      },
+      "NlpInsightOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "emotions": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Emotions",
+            "type": "object"
+          },
+          "feedback_id": {
+            "format": "uuid",
+            "title": "Feedback Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "enum": [
+                  "complaint",
+                  "suggestion",
+                  "praise",
+                  "question"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intent"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "sentiment": {
+            "enum": [
+              "positive",
+              "negative",
+              "neutral",
+              "mixed"
+            ],
+            "title": "Sentiment",
+            "type": "string"
+          },
+          "uncertainty": {
+            "title": "Uncertainty",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "feedback_id",
+          "model_name",
+          "model_version",
+          "sentiment",
+          "emotions",
+          "uncertainty",
+          "issues",
+          "intent",
+          "created_at"
+        ],
+        "title": "NlpInsightOut",
+        "type": "object"
+      },
+      "Phase": {
+        "description": "Trial phase (spec §12.1 Trial.phase).\n\n``qc_probe`` and ``catch`` are emitted by the test runner (Phase 3), not by the\nstaircase; they are listed so the schema matches the spec's enum.",
+        "enum": [
+          "familiarisation",
+          "descent",
+          "ascent",
+          "qc_probe",
+          "catch"
+        ],
+        "title": "Phase",
+        "type": "string"
+      },
+      "PresentationOut": {
+        "description": "The next tone the client must present (mirrors the engine Presentation).",
+        "properties": {
+          "ear": {
+            "$ref": "#/components/schemas/Ear"
+          },
+          "frequency_hz": {
+            "title": "Frequency Hz",
+            "type": "integer"
+          },
+          "level_db_hl": {
+            "title": "Level Db Hl",
+            "type": "integer"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "test_role": {
+            "$ref": "#/components/schemas/SearchRole"
+          }
+        },
+        "required": [
+          "ear",
+          "frequency_hz",
+          "level_db_hl",
+          "phase",
+          "test_role"
+        ],
+        "title": "PresentationOut",
+        "type": "object"
+      },
+      "QualityMetricsOut": {
+        "properties": {
+          "catch_false_alarms": {
+            "title": "Catch False Alarms",
+            "type": "integer"
+          },
+          "catch_trials": {
+            "title": "Catch Trials",
+            "type": "integer"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "discarded_trials": {
+            "description": "Session-integrity events (spec §10 #12)",
+            "title": "Discarded Trials",
+            "type": "integer"
+          },
+          "extra_responses": {
+            "title": "Extra Responses",
+            "type": "integer"
+          },
+          "false_positive_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "QUALIND #5: catch responses ÷ catch trials",
+            "title": "False Positive Rate"
+          },
+          "level_clamp_events": {
+            "description": "Spec §10 #13",
+            "title": "Level Clamp Events",
+            "type": "integer"
+          },
+          "mean_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "QUALIND #4: onset → response, tone hits",
+            "title": "Mean Latency Ms"
+          },
+          "median_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Latency Ms"
+          },
+          "no_response_thresholds": {
+            "title": "No Response Thresholds",
+            "type": "integer"
+          },
+          "possible_shadow_count": {
+            "title": "Possible Shadow Count",
+            "type": "integer"
+          },
+          "protocol_complete": {
+            "title": "Protocol Complete",
+            "type": "boolean"
+          },
+          "retest_1k_delta_db": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "QUALIND #6",
+            "title": "Retest 1K Delta Db"
+          },
+          "sd_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sd Latency Ms"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "tone_trials": {
+            "title": "Tone Trials",
+            "type": "integer"
+          },
+          "unresolved_thresholds": {
+            "title": "Unresolved Thresholds",
+            "type": "integer"
+          },
+          "unstable_1k": {
+            "title": "Unstable 1K",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "session_id",
+          "tone_trials",
+          "catch_trials",
+          "catch_false_alarms",
+          "false_positive_rate",
+          "discarded_trials",
+          "level_clamp_events",
+          "extra_responses",
+          "mean_latency_ms",
+          "sd_latency_ms",
+          "median_latency_ms",
+          "retest_1k_delta_db",
+          "unstable_1k",
+          "unresolved_thresholds",
+          "no_response_thresholds",
+          "possible_shadow_count",
+          "protocol_complete",
+          "computed_at"
+        ],
+        "title": "QualityMetricsOut",
+        "type": "object"
+      },
+      "SearchRole": {
+        "description": "Why a frequency is being tested.",
+        "enum": [
+          "initial",
+          "retest",
+          "verification"
+        ],
+        "title": "SearchRole",
+        "type": "string"
+      },
+      "SessionCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "better_ear": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Ear"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Self-reported better ear; tested first. Right if unknown."
+          },
+          "calibration": {
+            "$ref": "#/components/schemas/CalibrationInfo"
+          },
+          "client_time_origin_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "performance.timeOrigin (Unix ms): maps client *_ms clocks to wall time",
+            "title": "Client Time Origin Ms"
+          },
+          "consent_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Consent Version",
+            "type": "string"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceInfo"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "const": "threshold",
+            "description": "Only threshold mode is implemented; screening mode is kept separate (spec §6.5)",
+            "title": "Mode",
+            "type": "string"
+          },
+          "participant_id": {
+            "description": "Pseudonymous id; never a name or email (spec §12.3)",
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "profile_cap_db_hl": {
+            "default": 90,
+            "description": "Headphone profile ceiling, ≤ 90 dB HL (spec §3.4)",
+            "title": "Profile Cap Db Hl",
+            "type": "integer"
+          },
+          "supervision": {
+            "enum": [
+              "unsupervised",
+              "technician",
+              "clinician"
+            ],
+            "title": "Supervision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "participant_id",
+          "consent_version",
+          "mode",
+          "supervision",
+          "device",
+          "calibration"
+        ],
+        "title": "SessionCreate",
+        "type": "object"
+      },
+      "SessionOut": {
+        "properties": {
+          "abort_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AbortReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "better_ear": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Ear"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calibration": {
+            "additionalProperties": true,
+            "title": "Calibration",
+            "type": "object"
+          },
+          "client_time_origin_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Time Origin Ms"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "consent_version": {
+            "title": "Consent Version",
+            "type": "string"
+          },
+          "device": {
+            "additionalProperties": true,
+            "title": "Device",
+            "type": "object"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "participant_id": {
+            "format": "uuid",
+            "title": "Participant Id",
+            "type": "string"
+          },
+          "profile_cap_db_hl": {
+            "title": "Profile Cap Db Hl",
+            "type": "integer"
+          },
+          "protocol_version": {
+            "title": "Protocol Version",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "supervision": {
+            "title": "Supervision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "participant_id",
+          "protocol_version",
+          "consent_version",
+          "mode",
+          "supervision",
+          "better_ear",
+          "profile_cap_db_hl",
+          "status",
+          "abort_reason",
+          "client_time_origin_ms",
+          "device",
+          "calibration",
+          "environment",
+          "started_at",
+          "completed_at"
+        ],
+        "title": "SessionOut",
+        "type": "object"
+      },
+      "SessionResults": {
+        "properties": {
+          "audiogram": {
+            "description": "Accepted value per ear × frequency",
+            "items": {
+              "$ref": "#/components/schemas/ThresholdResultOut"
+            },
+            "title": "Audiogram",
+            "type": "array"
+          },
+          "protocol_complete": {
+            "title": "Protocol Complete",
+            "type": "boolean"
+          },
+          "quality_metrics": {
+            "$ref": "#/components/schemas/QualityMetricsOut"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionOut"
+          },
+          "thresholds": {
+            "description": "Every search, in test order",
+            "items": {
+              "$ref": "#/components/schemas/ThresholdResultOut"
+            },
+            "title": "Thresholds",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session",
+          "protocol_complete",
+          "thresholds",
+          "audiogram",
+          "quality_metrics"
+        ],
+        "title": "SessionResults",
+        "type": "object"
+      },
+      "SessionState": {
+        "properties": {
+          "next_presentation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresentationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol_complete": {
+            "title": "Protocol Complete",
+            "type": "boolean"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionOut"
+          },
+          "trial_count": {
+            "title": "Trial Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session",
+          "trial_count",
+          "next_presentation",
+          "protocol_complete"
+        ],
+        "title": "SessionState",
+        "type": "object"
+      },
+      "SessionStatus": {
+        "enum": [
+          "in_progress",
+          "complete",
+          "incomplete",
+          "aborted",
+          "invalidated"
+        ],
+        "title": "SessionStatus",
+        "type": "string"
+      },
+      "ThresholdResultOut": {
+        "properties": {
+          "ascending_hits": {
+            "title": "Ascending Hits",
+            "type": "integer"
+          },
+          "ascending_trials": {
+            "title": "Ascending Trials",
+            "type": "integer"
+          },
+          "ascents_completed": {
+            "title": "Ascents Completed",
+            "type": "integer"
+          },
+          "clamp_events": {
+            "title": "Clamp Events",
+            "type": "integer"
+          },
+          "computed_at": {
+            "format": "date-time",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "ear": {
+            "$ref": "#/components/schemas/Ear"
+          },
+          "floor_limited": {
+            "description": "Threshold ≤ −10 dB HL (lattice floor)",
+            "title": "Floor Limited",
+            "type": "boolean"
+          },
+          "frequency_hz": {
+            "title": "Frequency Hz",
+            "type": "integer"
+          },
+          "is_accepted": {
+            "description": "The value reported on the audiogram for this ear × frequency",
+            "title": "Is Accepted",
+            "type": "boolean"
+          },
+          "possible_shadow": {
+            "description": "Interaural Δ ≥ 40 dB, poorer ear, unmasked: possible cross-hearing (spec §1.3)",
+            "title": "Possible Shadow",
+            "type": "boolean"
+          },
+          "presentations": {
+            "title": "Presentations",
+            "type": "integer"
+          },
+          "provisional_db_hl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provisional Db Hl"
+          },
+          "search_index": {
+            "description": "Order of this search within the session",
+            "title": "Search Index",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ThresholdStatus"
+          },
+          "test_role": {
+            "$ref": "#/components/schemas/SearchRole"
+          },
+          "threshold_db_hl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Measured threshold; the ceiling for no_response (plot ↓ arrow); null if unresolved",
+            "title": "Threshold Db Hl"
+          }
+        },
+        "required": [
+          "ear",
+          "frequency_hz",
+          "test_role",
+          "search_index",
+          "status",
+          "threshold_db_hl",
+          "provisional_db_hl",
+          "ascending_hits",
+          "ascending_trials",
+          "ascents_completed",
+          "presentations",
+          "floor_limited",
+          "clamp_events",
+          "is_accepted",
+          "possible_shadow",
+          "computed_at"
+        ],
+        "title": "ThresholdResultOut",
+        "type": "object"
+      },
+      "ThresholdStatus": {
+        "enum": [
+          "measured",
+          "no_response",
+          "unresolved"
+        ],
+        "title": "ThresholdStatus",
+        "type": "string"
+      },
+      "TrialAccepted": {
+        "properties": {
+          "advanced_protocol": {
+            "description": "False for catch and discarded trials: they never move the staircase",
+            "title": "Advanced Protocol",
+            "type": "boolean"
+          },
+          "idempotent_replay": {
+            "description": "True when this exact trial was already stored",
+            "title": "Idempotent Replay",
+            "type": "boolean"
+          },
+          "next_presentation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresentationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "protocol_complete": {
+            "title": "Protocol Complete",
+            "type": "boolean"
+          },
+          "trial": {
+            "$ref": "#/components/schemas/TrialOut"
+          }
+        },
+        "required": [
+          "trial",
+          "advanced_protocol",
+          "idempotent_replay",
+          "next_presentation",
+          "protocol_complete"
+        ],
+        "title": "TrialAccepted",
+        "type": "object"
+      },
+      "TrialCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "ambient_dba_at_trial": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ambient Dba At Trial"
+          },
+          "audio_context_onset_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Context Onset S"
+          },
+          "discard_reason": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discard Reason"
+          },
+          "discarded": {
+            "default": false,
+            "title": "Discarded",
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "ear": {
+            "$ref": "#/components/schemas/Ear"
+          },
+          "extra_responses": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Extra Responses",
+            "type": "integer"
+          },
+          "frequency_hz": {
+            "title": "Frequency Hz",
+            "type": "integer"
+          },
+          "is_catch_trial": {
+            "title": "Is Catch Trial",
+            "type": "boolean"
+          },
+          "isi_ms": {
+            "minimum": 0.0,
+            "title": "Isi Ms",
+            "type": "number"
+          },
+          "level_clamped": {
+            "default": false,
+            "description": "QC indicator 13 (spec §10)",
+            "title": "Level Clamped",
+            "type": "boolean"
+          },
+          "level_db_hl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Requested level; null for catch trials",
+            "title": "Level Db Hl"
+          },
+          "offset_at_ms": {
+            "description": "Stimulus offset (session clock)",
+            "title": "Offset At Ms",
+            "type": "number"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "presented_at_ms": {
+            "description": "Stimulus onset (session clock)",
+            "title": "Presented At Ms",
+            "type": "number"
+          },
+          "presented_level_db_hl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Delivered level after output-ceiling clamping",
+            "title": "Presented Level Db Hl"
+          },
+          "responded": {
+            "description": "A press inside onset → offset + 2 s",
+            "title": "Responded",
+            "type": "boolean"
+          },
+          "response_at_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response At Ms"
+          },
+          "response_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "response − onset",
+            "title": "Response Latency Ms"
+          },
+          "scheduled_at_ms": {
+            "title": "Scheduled At Ms",
+            "type": "number"
+          },
+          "seq": {
+            "description": "0-based, gapless order within the session",
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "test_role": {
+            "$ref": "#/components/schemas/SearchRole"
+          },
+          "trial_id": {
+            "description": "Client-generated; also the idempotency key for retries",
+            "format": "uuid",
+            "title": "Trial Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trial_id",
+          "seq",
+          "ear",
+          "frequency_hz",
+          "level_db_hl",
+          "phase",
+          "test_role",
+          "is_catch_trial",
+          "scheduled_at_ms",
+          "presented_at_ms",
+          "offset_at_ms",
+          "duration_ms",
+          "isi_ms",
+          "responded"
+        ],
+        "title": "TrialCreate",
+        "type": "object"
+      },
+      "TrialOut": {
+        "properties": {
+          "ambient_dba_at_trial": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ambient Dba At Trial"
+          },
+          "audio_context_onset_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Context Onset S"
+          },
+          "discard_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discard Reason"
+          },
+          "discarded": {
+            "title": "Discarded",
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "number"
+          },
+          "ear": {
+            "$ref": "#/components/schemas/Ear"
+          },
+          "extra_responses": {
+            "title": "Extra Responses",
+            "type": "integer"
+          },
+          "frequency_hz": {
+            "title": "Frequency Hz",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_catch_trial": {
+            "title": "Is Catch Trial",
+            "type": "boolean"
+          },
+          "isi_ms": {
+            "title": "Isi Ms",
+            "type": "number"
+          },
+          "level_clamped": {
+            "title": "Level Clamped",
+            "type": "boolean"
+          },
+          "level_db_hl": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Db Hl"
+          },
+          "offset_at_ms": {
+            "title": "Offset At Ms",
+            "type": "number"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "presented_at_ms": {
+            "title": "Presented At Ms",
+            "type": "number"
+          },
+          "presented_level_db_hl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presented Level Db Hl"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "responded": {
+            "title": "Responded",
+            "type": "boolean"
+          },
+          "response_at_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response At Ms"
+          },
+          "response_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Latency Ms"
+          },
+          "scheduled_at_ms": {
+            "title": "Scheduled At Ms",
+            "type": "number"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "test_role": {
+            "$ref": "#/components/schemas/SearchRole"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "seq",
+          "ear",
+          "frequency_hz",
+          "level_db_hl",
+          "presented_level_db_hl",
+          "level_clamped",
+          "phase",
+          "test_role",
+          "is_catch_trial",
+          "scheduled_at_ms",
+          "presented_at_ms",
+          "offset_at_ms",
+          "audio_context_onset_s",
+          "duration_ms",
+          "isi_ms",
+          "responded",
+          "response_at_ms",
+          "response_latency_ms",
+          "extra_responses",
+          "ambient_dba_at_trial",
+          "discarded",
+          "discard_reason",
+          "received_at"
+        ],
+        "title": "TrialOut",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Pure-tone threshold audiometry: sessions, trial log, server-computed thresholds and QC. Protocol aurohear-asha2005-ac-0.1.0.",
+    "title": "AuroHear v2 API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/feedback/{feedback_id}/insights": {
+      "post": {
+        "description": "Store a versioned NLP analysis of one feedback entry (append-only).",
+        "operationId": "add_insight_api_v1_feedback__feedback_id__insights_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Feedback Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NlpInsightCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NlpInsightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Insight",
+        "tags": [
+          "feedback"
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "description": "Initialise a session. Returns the first presentation to play.",
+        "operationId": "create_session_api_v1_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "get": {
+        "description": "Current status and the next expected presentation (rebuilt from the trial log).",
+        "operationId": "get_session_api_v1_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/abort": {
+      "post": {
+        "description": "Mark the session aborted. Its trials are kept (partial data is research data).",
+        "operationId": "abort_session_api_v1_sessions__session_id__abort_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbortRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abort Session",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/feedback": {
+      "get": {
+        "operationId": "list_feedback_api_v1_sessions__session_id__feedback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FeedbackOut"
+                  },
+                  "title": "Response List Feedback Api V1 Sessions  Session Id  Feedback Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Feedback",
+        "tags": [
+          "feedback"
+        ]
+      },
+      "post": {
+        "description": "Store the participant's free-text self-report.",
+        "operationId": "create_feedback_api_v1_sessions__session_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Feedback",
+        "tags": [
+          "feedback"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/finalize": {
+      "post": {
+        "description": "Compute thresholds and quality metrics from the trial log and close the session.",
+        "operationId": "finalize_session_api_v1_sessions__session_id__finalize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Finalize Session",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/results": {
+      "get": {
+        "operationId": "get_results_api_v1_sessions__session_id__results_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Results",
+        "tags": [
+          "results"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/trials": {
+      "get": {
+        "operationId": "list_trials_api_v1_sessions__session_id__trials_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrialOut"
+                  },
+                  "title": "Response List Trials Api V1 Sessions  Session Id  Trials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Trials",
+        "tags": [
+          "trials"
+        ]
+      },
+      "post": {
+        "description": "Append one trial. Tone trials advance the staircase; the response carries the\nnext presentation. Retrying with the same `trial_id` and body is safe.",
+        "operationId": "record_trial_api_v1_sessions__session_id__trials_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Out-of-order seq, mismatch with the protocol, or closed session"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Trial",
+        "tags": [
+          "trials"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "meta"
+        ]
+      }
+    }
+  }
+}
