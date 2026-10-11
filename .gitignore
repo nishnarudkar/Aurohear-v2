@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+venv*/
+env/
+.venv/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Local Database
+*.sqlite3
+*.db
+users.db
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
