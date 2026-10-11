@@ -38,3 +38,12 @@ Thumbs.db
 node_modules/
 npm-debug.log
 yarn-error.log
+
+# Claude
+claude.md
+CLAUDE.md
+claude.md.txt
+
+# Testing
+.pytest_cache/
+.hypothesis/
