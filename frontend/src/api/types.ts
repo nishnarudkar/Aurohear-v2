@@ -136,12 +136,51 @@ export interface QualityMetricsDto {
   readonly [key: string]: unknown;
 }
 
+export type LikelihoodBandDto = 'low' | 'medium' | 'high' | 'indeterminate';
+export type ReferralDto =
+  | 'urgent_ent'
+  | 'audiologist'
+  | 'retest_required'
+  | 'repeat_then_refer'
+  | 'retest_after_noise_free_interval'
+  | 'speech_in_noise_test'
+  | 'routine_retest';
+
+/** Spec §9 classification (backend services/classification.py). */
+export interface ClassificationDto {
+  readonly model_version: string;
+  readonly calibration_tier: 'A' | 'B' | 'C';
+  readonly pta4_right: number | null;
+  readonly pta4_left: number | null;
+  readonly pta4_better: number | null;
+  readonly better_ear: Ear | null;
+  readonly who_grade_better_ear:
+    | 'normal' | 'mild' | 'moderate' | 'moderately_severe' | 'severe' | 'profound' | 'complete' | null;
+  readonly who_grade_is_lower_bound: boolean;
+  readonly bsa_descriptor_right: 'none' | 'mild' | 'moderate' | 'severe' | 'profound' | null;
+  readonly bsa_descriptor_left: 'none' | 'mild' | 'moderate' | 'severe' | 'profound' | null;
+  readonly sigma_pta_db: number;
+  /** Null when suppressed (red flag or indeterminate) — never display a number then. */
+  readonly p_hearing_loss: number | null;
+  readonly band: LikelihoodBandDto | null;
+  readonly qc_composite: 'good' | 'fair' | 'poor';
+  readonly confidence: 'high' | 'moderate' | 'low';
+  readonly overrides_applied: readonly { readonly code: string; readonly reason: string }[];
+  readonly annotations: readonly string[];
+  readonly referral: ReferralDto;
+  /** Participant-facing, non-diagnostic wording (spec §9.2 Step 5). */
+  readonly statement: string;
+  readonly caveats: readonly string[];
+  readonly [key: string]: unknown;
+}
+
 export interface SessionResultsDto {
   readonly session: SessionDto;
   readonly protocol_complete: boolean;
   readonly thresholds: readonly ThresholdResultDto[];
   readonly audiogram: readonly ThresholdResultDto[];
   readonly quality_metrics: QualityMetricsDto;
+  readonly classification: ClassificationDto;
 }
 
 export interface FeedbackCreateDto {

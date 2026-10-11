@@ -29,6 +29,57 @@
         "title": "AbortRequest",
         "type": "object"
       },
+      "AverageOut": {
+        "properties": {
+          "frequencies_used": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Frequencies Used",
+            "type": "array"
+          },
+          "includes_no_response": {
+            "description": "A no-response entered the mean: the true average is at least this",
+            "title": "Includes No Response",
+            "type": "boolean"
+          },
+          "partial": {
+            "description": "Some frequencies unresolved, untested or excluded as possible shadow",
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "value_db_hl": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Db Hl"
+          }
+        },
+        "required": [
+          "value_db_hl",
+          "frequencies_used",
+          "partial",
+          "includes_no_response"
+        ],
+        "title": "AverageOut",
+        "type": "object"
+      },
+      "BsaDescriptor": {
+        "enum": [
+          "none",
+          "mild",
+          "moderate",
+          "severe",
+          "profound"
+        ],
+        "title": "BsaDescriptor",
+        "type": "string"
+      },
       "CalibrationInfo": {
         "additionalProperties": false,
         "properties": {
@@ -99,6 +150,274 @@
         ],
         "title": "CalibrationInfo",
         "type": "object"
+      },
+      "CalibrationTier": {
+        "enum": [
+          "A",
+          "B",
+          "C"
+        ],
+        "title": "CalibrationTier",
+        "type": "string"
+      },
+      "ClassificationOut": {
+        "description": "Spec §12.1 Classification, computed per §9 and stored at finalize.",
+        "properties": {
+          "annotations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Annotations",
+            "type": "array"
+          },
+          "asymmetry_db": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asymmetry Db"
+          },
+          "band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LikelihoodBand"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Final band after §9.2 Step 4 overrides; null under a red flag"
+          },
+          "better_ear": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Ear"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bias_correction_db": {
+            "title": "Bias Correction Db",
+            "type": "number"
+          },
+          "bsa_avg5_left": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bsa Avg5 Left"
+          },
+          "bsa_avg5_right": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bsa Avg5 Right"
+          },
+          "bsa_descriptor_left": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BsaDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bsa_descriptor_right": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BsaDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calibration_tier": {
+            "$ref": "#/components/schemas/CalibrationTier"
+          },
+          "caveats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Caveats",
+            "type": "array"
+          },
+          "computed_band": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LikelihoodBand"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Band from P alone, before overrides"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/Confidence"
+          },
+          "ears": {
+            "items": {
+              "$ref": "#/components/schemas/EarSummaryOut"
+            },
+            "title": "Ears",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "overrides_applied": {
+            "items": {
+              "$ref": "#/components/schemas/OverrideOut"
+            },
+            "title": "Overrides Applied",
+            "type": "array"
+          },
+          "p_hearing_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Φ((PTA_adj − 20)/σ_tier); null when suppressed (red flag or indeterminate)",
+            "title": "P Hearing Loss"
+          },
+          "pta4_better": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pta4 Better"
+          },
+          "pta4_left": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pta4 Left"
+          },
+          "pta4_right": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pta4 Right"
+          },
+          "pta_adjusted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pta Adjusted"
+          },
+          "qc_composite": {
+            "$ref": "#/components/schemas/QcComposite",
+            "description": "PROVISIONAL rule-based stand-in for the QUALIND composite"
+          },
+          "referral": {
+            "$ref": "#/components/schemas/Referral"
+          },
+          "sigma_pta_db": {
+            "title": "Sigma Pta Db",
+            "type": "number"
+          },
+          "statement": {
+            "description": "Participant-facing wording per §9.2 Step 5",
+            "title": "Statement",
+            "type": "string"
+          },
+          "who_grade_better_ear": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WhoGrade"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "WHO 2021, better-ear PTA₄"
+          },
+          "who_grade_is_lower_bound": {
+            "title": "Who Grade Is Lower Bound",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model_version",
+          "calibration_tier",
+          "ears",
+          "pta4_right",
+          "pta4_left",
+          "pta4_better",
+          "better_ear",
+          "who_grade_better_ear",
+          "who_grade_is_lower_bound",
+          "bsa_avg5_right",
+          "bsa_avg5_left",
+          "bsa_descriptor_right",
+          "bsa_descriptor_left",
+          "bias_correction_db",
+          "sigma_pta_db",
+          "pta_adjusted",
+          "p_hearing_loss",
+          "computed_band",
+          "band",
+          "qc_composite",
+          "confidence",
+          "asymmetry_db",
+          "overrides_applied",
+          "annotations",
+          "referral",
+          "statement",
+          "caveats"
+        ],
+        "title": "ClassificationOut",
+        "type": "object"
+      },
+      "Confidence": {
+        "enum": [
+          "high",
+          "moderate",
+          "low"
+        ],
+        "title": "Confidence",
+        "type": "string"
       },
       "DeviceInfo": {
         "additionalProperties": false,
@@ -203,6 +522,39 @@
         ],
         "title": "Ear",
         "type": "string"
+      },
+      "EarSummaryOut": {
+        "properties": {
+          "bsa_avg5": {
+            "$ref": "#/components/schemas/AverageOut",
+            "description": "Mean of 250–4000 Hz; no-response counted as 130 dB HL (BSA)"
+          },
+          "bsa_descriptor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BsaDescriptor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ear": {
+            "$ref": "#/components/schemas/Ear"
+          },
+          "pta4": {
+            "$ref": "#/components/schemas/AverageOut",
+            "description": "Mean of 500, 1000, 2000, 4000 Hz (spec §9.1)"
+          }
+        },
+        "required": [
+          "ear",
+          "pta4",
+          "bsa_avg5",
+          "bsa_descriptor"
+        ],
+        "title": "EarSummaryOut",
+        "type": "object"
       },
       "EnvironmentInfo": {
         "additionalProperties": false,
@@ -420,6 +772,16 @@
         "title": "Issue",
         "type": "object"
       },
+      "LikelihoodBand": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "indeterminate"
+        ],
+        "title": "LikelihoodBand",
+        "type": "string"
+      },
       "NlpInsightCreate": {
         "additionalProperties": false,
         "properties": {
@@ -579,6 +941,24 @@
         "title": "NlpInsightOut",
         "type": "object"
       },
+      "OverrideOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "reason"
+        ],
+        "title": "OverrideOut",
+        "type": "object"
+      },
       "Phase": {
         "description": "Trial phase (spec §12.1 Trial.phase).\n\n``qc_probe`` and ``catch`` are emitted by the test runner (Phase 3), not by the\nstaircase; they are listed so the schema matches the spec's enum.",
         "enum": [
@@ -621,6 +1001,15 @@
         ],
         "title": "PresentationOut",
         "type": "object"
+      },
+      "QcComposite": {
+        "enum": [
+          "good",
+          "fair",
+          "poor"
+        ],
+        "title": "QcComposite",
+        "type": "string"
       },
       "QualityMetricsOut": {
         "properties": {
@@ -761,6 +1150,20 @@
         ],
         "title": "QualityMetricsOut",
         "type": "object"
+      },
+      "Referral": {
+        "description": "§9.4. Ordered by urgency via REFERRAL_RANK.",
+        "enum": [
+          "urgent_ent",
+          "audiologist",
+          "retest_required",
+          "repeat_then_refer",
+          "retest_after_noise_free_interval",
+          "speech_in_noise_test",
+          "routine_retest"
+        ],
+        "title": "Referral",
+        "type": "string"
       },
       "SearchRole": {
         "description": "Why a frequency is being tested.",
@@ -996,6 +1399,9 @@
             "title": "Audiogram",
             "type": "array"
           },
+          "classification": {
+            "$ref": "#/components/schemas/ClassificationOut"
+          },
           "protocol_complete": {
             "title": "Protocol Complete",
             "type": "boolean"
@@ -1020,7 +1426,8 @@
           "protocol_complete",
           "thresholds",
           "audiogram",
-          "quality_metrics"
+          "quality_metrics",
+          "classification"
         ],
         "title": "SessionResults",
         "type": "object"
@@ -1623,6 +2030,19 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "WhoGrade": {
+        "enum": [
+          "normal",
+          "mild",
+          "moderate",
+          "moderately_severe",
+          "severe",
+          "profound",
+          "complete"
+        ],
+        "title": "WhoGrade",
+        "type": "string"
       }
     }
   },

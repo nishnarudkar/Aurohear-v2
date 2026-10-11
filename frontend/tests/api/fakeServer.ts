@@ -86,7 +86,7 @@ export class FakeServer {
     }
     if (method === 'POST' && path.endsWith('/finalize')) {
       this.status = this.index >= this.script.length ? 'complete' : this.status === 'aborted' ? 'aborted' : 'incomplete';
-      return json(200, { session: this.session(), protocol_complete: this.index >= this.script.length, thresholds: [], audiogram: [], quality_metrics: {} });
+      return json(200, { session: this.session(), protocol_complete: this.index >= this.script.length, thresholds: [], audiogram: [], quality_metrics: {}, classification: {} });
     }
     if (method === 'POST' && path.endsWith('/abort')) {
       if (this.status !== 'in_progress') return json(409, { error: { code: 'conflict', message: 'not in progress' } });

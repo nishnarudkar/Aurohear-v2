@@ -79,6 +79,17 @@ describe('API contract (openapi.json)', () => {
     expect(Object.keys(p['/api/v1/sessions/{session_id}/feedback'] ?? {})).toContain('post');
   });
 
+  it('ClassificationOut carries the fields the frontend type declares', () => {
+    expect(props('SessionResults')).toContain('classification');
+    expect(props('ClassificationOut')).toEqual(
+      expect.arrayContaining([
+        'band', 'p_hearing_loss', 'who_grade_better_ear', 'bsa_descriptor_right', 'bsa_descriptor_left',
+        'referral', 'statement', 'caveats', 'overrides_applied', 'qc_composite', 'confidence', 'model_version',
+      ]),
+    );
+    expect(new Set(schema('LikelihoodBand').enum)).toEqual(new Set(['low', 'medium', 'high', 'indeterminate']));
+  });
+
   it('SessionCreate accepts the fields the adapter documents', () => {
     expect(props('SessionCreate')).toEqual(
       [
