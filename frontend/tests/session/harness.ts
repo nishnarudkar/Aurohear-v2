@@ -16,6 +16,7 @@ import {
   type StimulusPort,
   type TestSession,
   type ThresholdProcedure,
+  type TrialRecord,
 } from '../../src/session';
 
 export const flush = async (): Promise<void> => {
@@ -130,6 +131,9 @@ export function makeHarness(
     seed?: number;
     procedure?: ScriptedProcedure;
     stimulusFailOn?: (p: Presentation) => boolean;
+    trialLog?: (t: TrialRecord) => void;
+    procedureImpl?: ThresholdProcedure;
+    createId?: () => string;
   } = {},
 ): Harness {
   const clock = new SimulatedClock();
@@ -137,15 +141,17 @@ export function makeHarness(
   const now = (): number => clock.now();
   const stimulus = new FakeStimulus(now, opts.seed ?? 1, opts.stimulusFailOn);
   const procedure = opts.procedure ?? new ScriptedProcedure(opts.script ?? standardScript());
+  const procedureImpl: ThresholdProcedure = opts.procedureImpl ?? procedure;
   let id = 0;
   const session = createTestSession(
     {
       deps: {
-        procedure,
+        procedure: procedureImpl,
         stimulus,
         now,
         random: mulberry32((opts.seed ?? 1) + 1000),
-        createId: () => `t${++id}`,
+        createId: opts.createId ?? (() => `t${++id}`),
+        ...(opts.trialLog ? { trialLog: opts.trialLog } : {}),
       },
       ...(opts.config ? { config: opts.config } : {}),
     },
@@ -180,7 +186,9 @@ export async function runSession(h: Harness, listener: Listener, maxSteps = 20_0
     const ctx = snap.context;
     const state = stateOf(h);
     if (state === 'Idle') actor.send({ type: 'START' });
-    else if (state === 'Instruction.loading' || state === 'Evaluation.updatingStaircase') await flush();
+    else if (state === 'Instruction.loading' || state === 'Evaluation.updatingStaircase') {
+      await new Promise((r) => setTimeout(r, 1)); // real time: the procedure may be a network call
+    }
     else if (state === 'Instruction.ready') actor.send({ type: 'ACKNOWLEDGE' });
     else if (state === 'Reinstruct') actor.send({ type: 'CONTINUE' });
     else if (state === 'Familiarization') {

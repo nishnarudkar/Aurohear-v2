@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { mulberry32 } from '../../src/audio/timing';
-import type { ActiveTrial } from '../../src/session';
+import type { ActiveTrial, TrialRecord } from '../../src/session';
 import {
   advanceTo,
   flush,
@@ -305,6 +305,54 @@ describe('catch trials and false-positive rate', () => {
       ),
       { numRuns: 60 },
     );
+  });
+});
+
+describe('trial log sink', () => {
+  it('receives every committed record exactly once, in seq order, including catch and discards', async () => {
+    const logged: TrialRecord[] = [];
+    const h = makeHarness({ config: { catchTrialRate: 0.3 }, trialLog: (t) => logged.push(t) });
+    const actor = h.session.actor;
+    actor.send({ type: 'START' });
+    await flush();
+    actor.send({ type: 'ACKNOWLEDGE' });
+    actor.send({ type: 'CONTINUE' });
+    await flush();
+    const tr = actor.getSnapshot().context.trial!;
+    await advanceTo(h, tr.onsetMs + 100);
+    actor.send({ type: 'DISCARD_TRIAL', reason: 'visibility_hidden' });
+    await flush();
+    await runSession(h, (t) => (t.isCatchTrial ? t.onsetMs + 300 : t.onsetMs + 350));
+    const snap = actor.getSnapshot();
+    expect(snap.status).toBe('done');
+    const all = snap.context.trials;
+    expect(logged).toEqual(all); // same records, same order, no duplicates
+    expect(logged.map((t) => t.seq)).toEqual(logged.map((_, i) => i));
+    expect(logged.some((t) => t.isCatchTrial)).toBe(true);
+    expect(logged.filter((t) => t.discarded).length).toBeGreaterThanOrEqual(1);
+    expect(new Set(logged.map((t) => t.trialId)).size).toBe(logged.length);
+  });
+
+  it('the trial cut short by STOP is logged as discarded; STOP with no trial logs nothing extra', async () => {
+    const logged: TrialRecord[] = [];
+    const h = makeHarness({ trialLog: (t) => logged.push(t) });
+    const actor = h.session.actor;
+    actor.send({ type: 'START' });
+    await flush();
+    actor.send({ type: 'ACKNOWLEDGE' });
+    actor.send({ type: 'CONTINUE' });
+    await flush();
+    const tr = actor.getSnapshot().context.trial!;
+    await advanceTo(h, tr.onsetMs + 100);
+    actor.send({ type: 'STOP' });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ trialId: tr.trialId, discarded: true, discardReason: 'aborted' });
+
+    const idle: TrialRecord[] = [];
+    const h2 = makeHarness({ trialLog: (t) => idle.push(t) });
+    h2.session.actor.send({ type: 'START' });
+    h2.session.actor.send({ type: 'STOP' });
+    expect(idle).toHaveLength(0);
   });
 });
 

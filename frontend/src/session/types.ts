@@ -68,6 +68,11 @@ export interface SessionDeps {
   /** Uniform [0, 1) — catch-trial placement. */
   readonly random: () => number;
   readonly createId: () => string;
+  /**
+   * Receives every committed trial record exactly once, in `seq` order — tone, catch
+   * and discarded trials alike (the API adapter uploads them). Must not block or throw.
+   */
+  readonly trialLog?: (trial: TrialRecord) => void;
 }
 
 export interface SessionConfig {

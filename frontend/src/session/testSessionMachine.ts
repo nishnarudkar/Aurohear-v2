@@ -66,6 +66,8 @@ export interface SessionContext {
   readonly pending: Presentation | null;
   readonly trial: ActiveTrial | null;
   readonly trials: readonly TrialRecord[];
+  /** How many of `trials` have been handed to `deps.trialLog`. */
+  readonly loggedTrialCount: number;
   readonly responses: readonly ResponseRecord[];
   readonly seq: number;
   readonly previousWasCatch: boolean;
@@ -246,6 +248,13 @@ export const testSessionMachine = setup({
         trial: null,
       };
     }),
+    /** Hand newly committed trial records to the log sink, in order, exactly once. */
+    emitTrialLog: ({ context }) => {
+      const sink = context.deps.trialLog;
+      if (!sink) return;
+      for (const t of context.trials.slice(context.loggedTrialCount)) sink(t);
+    },
+    markTrialsLogged: assign(({ context }) => ({ loggedTrialCount: context.trials.length })),
     markAborted: assign(({ context, event }) => ({
       abortReason: event.type === 'FAULT' ? event.reason : 'user',
       endedAtMs: context.deps.now(),
@@ -260,6 +269,7 @@ export const testSessionMachine = setup({
     pending: null,
     trial: null,
     trials: [],
+    loggedTrialCount: 0,
     responses: [],
     seq: 0,
     previousWasCatch: false,
@@ -278,8 +288,8 @@ export const testSessionMachine = setup({
   }),
   initial: 'Idle',
   on: {
-    STOP: { target: '.Aborted', actions: ['discardTrial', 'markAborted'] },
-    FAULT: { target: '.Aborted', actions: ['discardTrial', 'markAborted'] },
+    STOP: { target: '.Aborted', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'markAborted'] },
+    FAULT: { target: '.Aborted', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'markAborted'] },
   },
   output: ({ context }) => ({
     status: context.abortReason ? 'aborted' : 'complete',
@@ -372,7 +382,7 @@ export const testSessionMachine = setup({
         },
         waiting: {
           on: {
-            DISCARD_TRIAL: { target: '#session.InterStimulusInterval', reenter: true, actions: 'discardTrial' },
+            DISCARD_TRIAL: { target: '#session.InterStimulusInterval', reenter: true, actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
           },
           after: {
             untilOnset: [
@@ -388,7 +398,7 @@ export const testSessionMachine = setup({
       after: { untilOffset: 'ResponseWindow' },
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
-        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: 'discardTrial' },
+        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
       },
     },
 
@@ -396,7 +406,7 @@ export const testSessionMachine = setup({
       after: { untilOffset: 'ResponseWindow' },
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
-        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: 'discardTrial' },
+        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
       },
     },
 
@@ -406,7 +416,7 @@ export const testSessionMachine = setup({
       after: { untilScoring: 'Evaluation' },
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
-        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: 'discardTrial' },
+        DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
       },
     },
 
@@ -415,7 +425,7 @@ export const testSessionMachine = setup({
       on: { RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } } },
       states: {
         scoring: {
-          entry: 'commitTrial',
+          entry: ['commitTrial', 'emitTrialLog', 'markTrialsLogged'],
           always: [{ guard: 'lastTrialWasCatch', target: 'routing' }, { target: 'updatingStaircase' }],
         },
         updatingStaircase: {
