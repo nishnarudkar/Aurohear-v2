@@ -7,6 +7,16 @@ from uuid import UUID
 
 from pydantic import Field
 
+from aurohear.services.classification import (
+    BsaDescriptor,
+    CalibrationTier,
+    Confidence,
+    LikelihoodBand,
+    QcComposite,
+    Referral,
+    WhoGrade,
+)
+
 from .common import Ear, OutputModel, SearchRole, ThresholdStatus
 from .session import SessionOut
 
@@ -55,9 +65,63 @@ class QualityMetricsOut(OutputModel):
     computed_at: datetime
 
 
+class AverageOut(OutputModel):
+    value_db_hl: float | None
+    frequencies_used: list[int]
+    partial: bool = Field(description="Some frequencies unresolved, untested or excluded as possible shadow")
+    includes_no_response: bool = Field(description="A no-response entered the mean: the true average is at least this")
+
+
+class EarSummaryOut(OutputModel):
+    ear: Ear
+    pta4: AverageOut = Field(description="Mean of 500, 1000, 2000, 4000 Hz (spec §9.1)")
+    bsa_avg5: AverageOut = Field(description="Mean of 250–4000 Hz; no-response counted as 130 dB HL (BSA)")
+    bsa_descriptor: BsaDescriptor | None
+
+
+class OverrideOut(OutputModel):
+    code: str
+    reason: str
+
+
+class ClassificationOut(OutputModel):
+    """Spec §12.1 Classification, computed per §9 and stored at finalize."""
+
+    model_version: str
+    calibration_tier: CalibrationTier
+    ears: list[EarSummaryOut]
+    pta4_right: float | None
+    pta4_left: float | None
+    pta4_better: float | None
+    better_ear: Ear | None
+    who_grade_better_ear: WhoGrade | None = Field(description="WHO 2021, better-ear PTA₄")
+    who_grade_is_lower_bound: bool
+    bsa_avg5_right: float | None
+    bsa_avg5_left: float | None
+    bsa_descriptor_right: BsaDescriptor | None
+    bsa_descriptor_left: BsaDescriptor | None
+    bias_correction_db: float
+    sigma_pta_db: float
+    pta_adjusted: float | None
+    p_hearing_loss: float | None = Field(
+        description="Φ((PTA_adj − 20)/σ_tier); null when suppressed (red flag or indeterminate)"
+    )
+    computed_band: LikelihoodBand | None = Field(description="Band from P alone, before overrides")
+    band: LikelihoodBand | None = Field(description="Final band after §9.2 Step 4 overrides; null under a red flag")
+    qc_composite: QcComposite = Field(description="PROVISIONAL rule-based stand-in for the QUALIND composite")
+    confidence: Confidence
+    asymmetry_db: float | None
+    overrides_applied: list[OverrideOut]
+    annotations: list[str]
+    referral: Referral
+    statement: str = Field(description="Participant-facing wording per §9.2 Step 5")
+    caveats: list[str]
+
+
 class SessionResults(OutputModel):
     session: SessionOut
     protocol_complete: bool
     thresholds: list[ThresholdResultOut] = Field(description="Every search, in test order")
     audiogram: list[ThresholdResultOut] = Field(description="Accepted value per ear × frequency")
     quality_metrics: QualityMetricsOut
+    classification: ClassificationOut

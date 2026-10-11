@@ -1,5 +1,5 @@
 from .feedback import FeedbackCreate, FeedbackOut, NlpInsightCreate, NlpInsightOut
-from .results import QualityMetricsOut, SessionResults, ThresholdResultOut
+from .results import ClassificationOut, QualityMetricsOut, SessionResults, ThresholdResultOut
 from .session import (
     AbortReason,
     AbortRequest,
@@ -14,6 +14,7 @@ from .trial import TrialAccepted, TrialCreate, TrialOut
 __all__ = [
     "AbortReason",
     "AbortRequest",
+    "ClassificationOut",
     "FeedbackCreate",
     "FeedbackOut",
     "NlpInsightCreate",
