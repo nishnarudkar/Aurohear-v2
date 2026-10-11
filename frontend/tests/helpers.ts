@@ -84,13 +84,26 @@ export async function render(
     ...opts,
   });
   const tones = actions(engine);
-  for (const { time, run } of at) {
-    void ctx.suspend(time).then(() => {
-      run(tones);
-      return ctx.resume();
-    });
-  }
+  // Suspend points are harness machinery: if one is rejected or never runs, fail with
+  // that diagnosis rather than letting an engine assertion fail misleadingly.
+  const ran: boolean[] = at.map(() => false);
+  const errors: unknown[] = [];
+  at.forEach(({ time, run }, i) => {
+    ctx
+      .suspend(time)
+      .then(() => {
+        run(tones);
+        ran[i] = true;
+        return ctx.resume();
+      })
+      .catch((e: unknown) => errors.push(e));
+  });
   const buf = await ctx.startRendering();
+  if (errors.length || ran.some((r) => !r)) {
+    throw new Error(
+      `offline render harness: suspend points ran=${JSON.stringify(ran)} errors=${errors.map(String).join('; ')}`,
+    );
+  }
   return {
     left: buf.getChannelData(0),
     right: buf.getChannelData(1),
