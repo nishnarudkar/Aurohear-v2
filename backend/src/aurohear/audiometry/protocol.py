@@ -174,6 +174,14 @@ class AudiometryProtocol:
         if self._unit.is_complete:
             self._advance()
 
+    def ear_results_so_far(self) -> tuple[EarResult, ...]:
+        """Results for every ear whose familiarisation has finished, complete or not.
+
+        Lets an aborted session still report the threshold searches it did finish
+        (spec §7.3: partial sessions are research data — keep them, mark them).
+        """
+        return tuple(e.to_result() for e in self._ears if e.familiarisation is not None)
+
     def result(self) -> ProtocolResult:
         if not self.is_complete:
             raise RuntimeError("protocol has not completed")

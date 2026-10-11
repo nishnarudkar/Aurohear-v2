@@ -178,3 +178,24 @@ def test_protocol_api_contract() -> None:
     assert proto.next_presentation() is None
     with pytest.raises(RuntimeError):
         proto.record_response(True)
+
+
+def test_ear_results_so_far_reports_partial_progress() -> None:
+    proto = AudiometryProtocol()
+    assert proto.ear_results_so_far() == ()
+    listener = DeterministicListener(flat(30))
+    # Run until the first ear has finished 1000 + 2000 Hz.
+    while True:
+        p = proto.next_presentation()
+        assert p is not None
+        proto.record_response(listener(p))
+        partial = proto.ear_results_so_far()
+        if partial and len(partial[0].thresholds) == 2:
+            break
+    (right,) = partial
+    assert right.ear is Ear.RIGHT
+    assert set(right.audiogram) == {1000, 2000}
+    assert all(r.threshold_db_hl == 30 for r in right.audiogram.values())
+    # When complete, the partial view equals the final result.
+    drive(proto, listener)
+    assert proto.ear_results_so_far() == proto.result().ears
