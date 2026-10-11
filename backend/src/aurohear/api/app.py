@@ -25,7 +25,8 @@ from . import routes
 
 
 def create_app(engine: Engine | None = None) -> FastAPI:
-    engine = engine or make_engine(get_settings().database_url)
+    settings = get_settings()
+    engine = engine or make_engine(settings.database_url)
     factory = make_session_factory(engine)
 
     app = FastAPI(
@@ -34,6 +35,17 @@ def create_app(engine: Engine | None = None) -> FastAPI:
         description="Pure-tone threshold audiometry: sessions, trial log, server-computed "
         f"thresholds and QC. Protocol {PROTOCOL_VERSION}.",
     )
+
+    if settings.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.cors_origins),
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     def get_db() -> Iterator[Session]:
         yield from session_scope(factory)

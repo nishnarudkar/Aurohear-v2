@@ -10,12 +10,25 @@ import os
 from dataclasses import dataclass
 
 DEFAULT_DATABASE_URL = "sqlite:///./aurohear-dev.sqlite3"
+DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+)
 
 
 @dataclass(frozen=True, slots=True)
 class Settings:
     database_url: str
+    cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
 
 
 def get_settings() -> Settings:
-    return Settings(database_url=os.environ.get("AUROHEAR_DATABASE_URL", DEFAULT_DATABASE_URL))
+    db_url = os.environ.get("AUROHEAR_DATABASE_URL", DEFAULT_DATABASE_URL)
+    raw_cors = os.environ.get("AUROHEAR_CORS_ORIGINS")
+    if raw_cors:
+        cors_origins = tuple(o.strip() for o in raw_cors.split(",") if o.strip())
+    else:
+        cors_origins = DEFAULT_CORS_ORIGINS
+    return Settings(database_url=db_url, cors_origins=cors_origins)
