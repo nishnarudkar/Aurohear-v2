@@ -75,6 +75,9 @@ class SessionRow(Base):
     quality: Mapped[QualityMetricsRow | None] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    classification: Mapped[ClassificationRow | None] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("mode IN ('threshold', 'screening')", name="mode"),
@@ -224,6 +227,44 @@ class QualityMetricsRow(Base):
         CheckConstraint(
             "false_positive_rate IS NULL OR (false_positive_rate >= 0 AND false_positive_rate <= 1)",
             name="fp_rate_range",
+        ),
+    )
+
+
+class ClassificationRow(Base):
+    """Spec §12.1 Classification. Stored (not recomputed on read) together with the
+    model version, so re-fitting σ/bias/cut-points never silently changes a past result."""
+
+    __tablename__ = "classifications"
+
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    model_version: Mapped[str] = mapped_column(String(64))
+    calibration_tier: Mapped[str] = mapped_column(String(1))
+    pta4_better: Mapped[float | None] = mapped_column(Float)
+    who_grade: Mapped[str | None] = mapped_column(String(24))
+    p_hearing_loss: Mapped[float | None] = mapped_column(Float)
+    band: Mapped[str | None] = mapped_column(String(16), index=True)
+    qc_composite: Mapped[str] = mapped_column(String(8))
+    referral: Mapped[str] = mapped_column(String(40), index=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    session: Mapped[SessionRow] = relationship(back_populates="classification")
+
+    __table_args__ = (
+        CheckConstraint("calibration_tier IN ('A', 'B', 'C')", name="tier"),
+        CheckConstraint(
+            "band IS NULL OR band IN ('low', 'medium', 'high', 'indeterminate')", name="band"
+        ),
+        CheckConstraint("qc_composite IN ('good', 'fair', 'poor')", name="qc_composite"),
+        CheckConstraint(
+            "p_hearing_loss IS NULL OR (p_hearing_loss >= 0 AND p_hearing_loss <= 1)", name="p_range"
+        ),
+        # A probability is only ever shown with a computed band (never when indeterminate).
+        CheckConstraint(
+            "p_hearing_loss IS NULL OR (band IS NOT NULL AND band IN ('low', 'medium', 'high'))", name="p_needs_band"
         ),
     )
 
