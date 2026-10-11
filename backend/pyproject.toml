@@ -9,12 +9,17 @@ description = "AuroHear v2 — standards-compliant pure-tone threshold audiometr
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.6,<3",
+    "fastapi>=0.115",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "hypothesis>=6.100",
+    "httpx>=0.27",
+    "uvicorn>=0.30",
 ]
 
 [tool.setuptools.packages.find]
