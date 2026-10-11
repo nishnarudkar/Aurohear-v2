@@ -11,7 +11,7 @@
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 **AuroHear v2** is an open-source, digital audiology system engineered for unsupervised and clinician-assisted air-conduction pure-tone threshold audiometry in standard modern web browsers.
 
@@ -25,7 +25,7 @@ Consumer web hearing tests routinely suffer from acoustic artifacts (transient c
 
 ---
 
-## 🏛️ Standards Compliance
+## Standards Compliance
 
 AuroHear v2 is developed against the following clinical and engineering benchmarks:
 
@@ -42,7 +42,7 @@ Detailed specifications and architectural analysis:
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```mermaid
 graph TD
@@ -83,7 +83,7 @@ High-precision audio synthesis built on standard Web Audio primitives:
 
 ---
 
-## 🔬 Empirical & Statistical Validation
+## Empirical & Statistical Validation
 
 The algorithms have been subjected to extensive simulation and property testing:
 
@@ -100,7 +100,7 @@ The algorithms have been subjected to extensive simulation and property testing:
 
 ---
 
-## 📂 Repository Structure
+## Repository Structure
 
 ```text
 Aurohear-v2/
@@ -148,7 +148,7 @@ Aurohear-v2/
 
 ---
 
-## 🚀 Quickstart & Testing
+## Quickstart & Testing
 
 ### Backend Engine
 
@@ -189,7 +189,7 @@ npm test
 
 ---
 
-## ⚖️ Clinical Trade-Offs & Design Rationale
+## Clinical Trade-Offs & Design Rationale
 
 1. **Staircase Discretization (+2.5 dB Expected Bias)**: Because the staircase evaluates on a 5 dB grid and identifies the lowest level at which $\ge 50\%$ of ascending presentations are heard, the reported threshold will naturally reflect the first 5 dB step at or above the listener's true continuous perceptual threshold. In clinical audiometers, this causes an expected bias of approximately +2.5 dB, mirrored in our Monte Carlo findings (+2.7 dB).
 2. **Sub-Zero Threshold Floor (−10 dB HL)**: Thresholds at −10 dB HL cannot be approached from below. In accordance with clinical practice, repeated responses at −10 dB HL are recorded and classified as $\le -10\text{ dB HL}$.
@@ -198,7 +198,7 @@ npm test
 
 ---
 
-## 🗺️ Project Roadmap
+## Project Roadmap
 
 - [x] **Phase 1: Hughson–Westlake Engine**: Completed with 1000 Hz familiarisation, ascending reversal stop rule, and ASHA 2005 sequence ([`backend/`](backend/)).
 - [x] **Phase 2: Acoustic Stimulus Synthesis**: Completed with 48 kHz Web Audio engine, zero-crosstalk merger routing, and Hann envelope smoothing ([`frontend/`](frontend/)).
@@ -208,6 +208,6 @@ npm test
 
 ---
 
-## 📜 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
