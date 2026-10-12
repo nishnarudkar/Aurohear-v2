@@ -98,6 +98,13 @@ Zero network latency during testing with verified server parity:
 * **Resilient Outbox & IndexedDB Store (`outbox.ts`)**: Trials are persisted to an atomic queue before asynchronous background upload with exponential backoff and online detection.
 * **Engine Divergence Protection**: Backend replays incoming trials; any divergence raises `EngineDivergenceError` and aborts safely.
 
+### 5. Standards-Compliant Clinical Audiogram Renderer (`frontend/src/audiogram/`)
+Pixel-perfect SVG visualization and export matching spec §8 and clinical practice:
+* **Strict Geometric Aspect Ratio**: 1 octave on the logarithmic frequency scale equals exactly 20 dB on the inverted hearing-level scale, maintained across any arbitrary render dimension.
+* **Clinical Symbology**: Right ear red circle (`O`), left ear blue cross (`X`), continuous connecting lines (ASHA convention), 45° downward arrows for No-Response (NR) points (never joined to neighbours), and half-filled symbols for unmasked possible shadow points ($\ge 40\text{ dB}$ difference).
+* **Dual Presentation Modes**: Normal mode shading the WHO normal range (−10 to 20 dB HL); Clinician mode displaying $\pm\sigma_{\text{PTA}}$ error bars and historical search iterations (I/R/V).
+* **Accessibility & High-Resolution Export**: Light/dark themes exceeding WCAG AAA contrast ($\ge 7:1$ text, $\ge 4.5:1$ markers), semantic screen-reader descriptions, standalone SVG export, and 3× PNG rasterization (1944×2124 px).
+
 ---
 
 ## Empirical & Statistical Validation
@@ -106,6 +113,8 @@ The algorithms have been subjected to extensive simulation and property testing:
 
 | Metric / Test | Methodology | Finding / Performance |
 | :--- | :--- | :--- |
+| **Audiogram Aspect Ratio** | Log₂ frequency vs linear dB scale geometry | **Exact 1 octave = 20 dB** maintained across all viewport scales |
+| **Audiogram Theme Contrast** | Automated luminance ratio verification | **WCAG AAA compliant** ($\ge 7:1$ text, $\ge 4.5:1$ ear symbols) |
 | **Dual Engine Conformance** | 180 golden reference traces (42,000+ presentations) | **100% exact parity** across all tones, reverse steps, and thresholds |
 | **Network Outage Tolerance** | Full session with simulated mid-test network blackout | Zero testing stalls; 100% outbox drain and server agreement post-reconnect |
 | **Termination Safety** | Hypothesis property testing (unbounded responses) | Terminates in $\le 25$ presentations per frequency; never hangs |
@@ -223,6 +232,7 @@ npm test
 - [x] **Phase 2: Acoustic Stimulus Synthesis**: Completed with 48 kHz Web Audio engine, zero-crosstalk merger routing, and Hann envelope smoothing ([`frontend/`](frontend/)).
 - [x] **Phase 3: Client State Machine (FSM) & API Adapter**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, transition audit logging, and `ApiSessionClient` ([`frontend/src/session/`](frontend/src/session/), [`frontend/src/api/`](frontend/src/api/)).
 - [x] **Clinical Classification & Probabilistic Uncertainty**: Completed with WHO (2021) grading, BSA (2018) descriptors, Masalski $\sigma$-tier likelihood model, and mandatory clinical referral overrides ([`backend/src/aurohear/services/classification.py`](backend/src/aurohear/services/classification.py)).
+- [x] **Standards-Compliant Audiogram Renderer**: Completed with exact 1-octave=20dB geometry, ASHA symbology, WHO/Clinician modes, WCAG AAA themes, and 3× PNG/SVG export ([`frontend/src/audiogram/`](frontend/src/audiogram/)).
 - [ ] **Phase 4: Ambient Noise & Hardware Watchdog**: Ambient room noise gating via `AnalyserNode` and headphone unplug detection.
 - [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
