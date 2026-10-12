@@ -121,6 +121,13 @@ Standards-based environmental acoustic validation and session integrity per spec
 * **Device & Visibility Watchdog (`DeviceWatchdog.ts`)**: Monitors media device enumeration, audio context state, and tab visibility (`visibilitychange`, window blur). Unplugging headphones aborts the session safely; backgrounding the tab pauses testing (`Backgrounded`) and re-presents the trial upon return.
 * **Session Quality Metrics (`models.py`, Migration `0004`)**: Records pre-test room noise level, measurement mode (relative vs. absolute), noise interruption counts, and visibility pauses. Exceeding a 15% noise interruption rate marks session outcomes as "Indeterminate — retest required".
 
+### 8. Qualitative Feedback & Clinical Reliability NLP Module (`backend/src/aurohear/services/nlp/`)
+Post-test participant feedback analysis and symptom correlation per `NLP_RELIABILITY_MODULE.md`:
+* **Zero Clinical Contamination by Construction**: Post-test free-text feedback is collected strictly after session settlement. Analysis is physically isolated in its own database transaction savepoint and is mathematically prohibited from mutating pure-tone thresholds, PTA averages, WHO/BSA grades, or referrals.
+* **Auditable Rule-Based Lexicon Engine (`lexicon.py`, `analyzer.py`)**: Deterministic, lightweight parsing extracting polarity/subjectivity sentiment, hedging uncertainty ("not sure", "maybe"), intent (question, suggestion, complaint, praise), and graded issues (audio quality, volume level, UI instructions, technical failures) without heavy deep-learning runtime dependencies.
+* **Clinical Symptom Extraction & Correlation (`correlation.py`)**: Identifies mentions of unilateral loss, tinnitus, dizziness/vertigo, and fullness/blockage (robust against negation such as "no ringing"). Stores research correlations against audiometric data (e.g., unilateral loss vs. $\ge 15\text{ dB}$ inter-aural gap; tinnitus vs. 3–6 kHz thresholds $> 20\text{ dB HL}$).
+* **Administrative Triage & Privacy**: Flags acute medical red flags (sudden change, vertigo, ear pain) for clinician review. Endpoints (`GET /sessions/{id}/insights`, feedback lists) are strictly admin-token gated (`AUROHEAR_ADMIN_TOKEN`), returning only a receipt (`feedback_id`, `created_at`) to the participant. Append-only insight tables preserve full audit histories (Migration `0005`).
+
 ---
 
 ## Empirical & Statistical Validation
@@ -267,7 +274,8 @@ npm run dev
 - [x] **Clinical Classification & Probabilistic Uncertainty**: Completed with WHO (2021) grading, BSA (2018) descriptors, Masalski $\sigma$-tier likelihood model, and mandatory clinical referral overrides ([`backend/src/aurohear/services/classification.py`](backend/src/aurohear/services/classification.py)).
 - [x] **Standards-Compliant Audiogram Renderer**: Completed with exact 1-octave=20dB geometry, ASHA symbology, WHO/Clinician modes, WCAG AAA themes, and 3× PNG/SVG export ([`frontend/src/audiogram/`](frontend/src/audiogram/)).
 - [x] **Phase 4: Ambient Noise & Hardware Watchdog**: Completed with 16-band pre-test room noise check, inter-stimulus continuous noise gating, and hardware watchdog ([`frontend/src/audio/`](frontend/src/audio/), [`frontend/src/session/`](frontend/src/session/)).
-- [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
+- [x] **Phase 5: Qualitative Feedback & Clinical Reliability Module**: Completed with lexicon analyzer, clinical red-flag triage, audiological symptom correlation, and admin endpoints ([`backend/src/aurohear/services/nlp/`](backend/src/aurohear/services/nlp/)).
+- [ ] **Phase 6: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
 ---
 
