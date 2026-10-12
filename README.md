@@ -114,6 +114,13 @@ End-to-end user experience strictly adhering to clinical gating rules:
 * **Zero Visual Cue Test Runner (`TestRunnerScreen.tsx`, `ResponseButton.tsx`)**: Touch/click button ($\ge 96\text{ px}$) and Space/Enter listener. HTML and visual styles remain 100% byte-identical whether a tone is playing or not (spec §7.4). Hardware event timestamps (`event.timeStamp`) are passed directly to latency calculators.
 * **Accessibility & Theme System (`styles.css`)**: Light and dark themes engineered for WCAG AAA contrast ($\ge 7:1$ text, $\ge 4.5:1$ UI components) with zero animations or transitions across the testing workflow.
 
+### 7. Ambient Noise Monitoring & Hardware Watchdog (`NoiseGate.ts`, `DeviceWatchdog.ts`)
+Standards-based environmental acoustic validation and session integrity per spec §4.1 and §5.3:
+* **Pre-Test 15s Room Noise Baseline (`EnvironmentScreen.tsx`, `NoiseGate.ts`)**: Requests unadulterated microphone stream with echo cancellation, auto-gain, and noise suppression strictly disabled. Verifies 16 fractional ⅓-octave bands (250 Hz–8 kHz) via Web Audio `AnalyserNode`. Supports both relative baseline matching (jump $\ge 10\text{ dB}$) and absolute MPANL thresholds (ISO 8253-1).
+* **Inter-Stimulus Continuous Noise Gating (`testSessionMachine.ts`, `environmentGuards.ts`)**: Evaluates ambient noise exclusively in the quiet intervals between tones, masking tone playback windows (−50 to +150 ms) and keypress artifacts (400 ms). Sustained noise triggers `NOISE_EXCEEDED` → `NoisyWait`, discards the trial in flight, and replays the stimulus after 2 s of quiet.
+* **Device & Visibility Watchdog (`DeviceWatchdog.ts`)**: Monitors media device enumeration, audio context state, and tab visibility (`visibilitychange`, window blur). Unplugging headphones aborts the session safely; backgrounding the tab pauses testing (`Backgrounded`) and re-presents the trial upon return.
+* **Session Quality Metrics (`models.py`, Migration `0004`)**: Records pre-test room noise level, measurement mode (relative vs. absolute), noise interruption counts, and visibility pauses. Exceeding a 15% noise interruption rate marks session outcomes as "Indeterminate — retest required".
+
 ---
 
 ## Empirical & Statistical Validation
@@ -125,6 +132,9 @@ The algorithms have been subjected to extensive simulation and property testing:
 | **Audiogram Aspect Ratio** | Log₂ frequency vs linear dB scale geometry | **Exact 1 octave = 20 dB** maintained across all viewport scales |
 | **Audiogram Theme Contrast** | Automated luminance ratio verification | **WCAG AAA compliant** ($\ge 7:1$ text, $\ge 4.5:1$ ear symbols) |
 | **Zero Visual Cue Invariant** | Byte-identical HTML snapshot comparison during tone playback | **100% byte-identical DOM** across 180+ sampled intervals |
+| **16-Band Noise Measurement** | Flat-spectrum calibration test across 250, 1k, and 4k Hz | **Within 0.0 dB** band-to-band amplitude consistency |
+| **Audio-Gating Timing Margins** | Stimulus window masking (−50 ms to +150 ms) & keypresses (400 ms) | **Zero self-triggering** on test tones or user interactions |
+| **Hardware Disconnect Detection** | Simulated device change & audio context suspension events | **100% abort interception** on headphone disconnect |
 | **Dual Engine Conformance** | 180 golden reference traces (42,000+ presentations) | **100% exact parity** across all tones, reverse steps, and thresholds |
 | **Network Outage Tolerance** | Full session with simulated mid-test network blackout | Zero testing stalls; 100% outbox drain and server agreement post-reconnect |
 | **Termination Safety** | Hypothesis property testing (unbounded responses) | Terminates in $\le 25$ presentations per frequency; never hangs |
@@ -256,8 +266,7 @@ npm run dev
 - [x] **Phase 3: Client State Machine (FSM) & API Adapter**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, transition audit logging, and `ApiSessionClient` ([`frontend/src/session/`](frontend/src/session/), [`frontend/src/api/`](frontend/src/api/)).
 - [x] **Clinical Classification & Probabilistic Uncertainty**: Completed with WHO (2021) grading, BSA (2018) descriptors, Masalski $\sigma$-tier likelihood model, and mandatory clinical referral overrides ([`backend/src/aurohear/services/classification.py`](backend/src/aurohear/services/classification.py)).
 - [x] **Standards-Compliant Audiogram Renderer**: Completed with exact 1-octave=20dB geometry, ASHA symbology, WHO/Clinician modes, WCAG AAA themes, and 3× PNG/SVG export ([`frontend/src/audiogram/`](frontend/src/audiogram/)).
-- [x] **Clinical Screen Flow & App State Machine**: Completed with XState `appFlowMachine`, red-flag gate, headphone & channel verification, Tier C calibration, zero-visual-cue test runner, and WCAG AAA themes ([`frontend/src/app/`](frontend/src/app/)).
-- [ ] **Phase 4: Ambient Noise & Hardware Watchdog**: Ambient room noise gating via `AnalyserNode` and headphone unplug detection.
+- [x] **Phase 4: Ambient Noise & Hardware Watchdog**: Completed with 16-band pre-test room noise check, inter-stimulus continuous noise gating, and hardware watchdog ([`frontend/src/audio/`](frontend/src/audio/), [`frontend/src/session/`](frontend/src/session/)).
 - [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
 ---
