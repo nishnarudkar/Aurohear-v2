@@ -82,8 +82,13 @@ export interface TrialToneRequest {
   readonly levelDbHl: number;
 }
 
-/** A setup-screen tone (channel check, calibration) with explicit timing. */
-export interface FixedToneRequest extends TrialToneRequest {
+/**
+ * A setup-screen tone (channel check, calibration) with explicit timing. `'both'` plays
+ * binaurally — used only by the §3.2 biological calibration; trial tones are always
+ * single-ear (TrialToneRequest has no 'both').
+ */
+export interface FixedToneRequest extends Omit<TrialToneRequest, 'ear'> {
+  readonly ear: Ear | 'both';
   readonly durationMs: number;
   /** Silence before onset, measured from the later of now and the previous offset. */
   readonly isiMs: number;
@@ -220,7 +225,7 @@ export class ToneStimulusEngine {
 
   // ------------------------------------------------------------------ internals
 
-  private schedule(request: TrialToneRequest, durationMs: number, isiMs: number): ScheduledTone {
+  private schedule(request: TrialToneRequest | FixedToneRequest, durationMs: number, isiMs: number): ScheduledTone {
     if (this.disposed) throw new Error('engine has been disposed');
     if (this.requireRunning && this.context.state !== 'running') {
       throw new AudioContextNotRunningError(this.context.state);
@@ -246,7 +251,12 @@ export class ToneStimulusEngine {
 
     osc.connect(envelope);
     envelope.connect(levelGain);
-    levelGain.connect(this.merger, 0, EAR_CHANNEL[request.ear]);
+    if (request.ear === 'both') {
+      levelGain.connect(this.merger, 0, EAR_CHANNEL.left);
+      levelGain.connect(this.merger, 0, EAR_CHANNEL.right);
+    } else {
+      levelGain.connect(this.merger, 0, EAR_CHANNEL[request.ear]);
+    }
 
     envelope.gain.setValueCurveAtTime(this.riseCurve, onsetTime, rampS);
     envelope.gain.setValueCurveAtTime(this.fallCurve, offsetTime - rampS, rampS);

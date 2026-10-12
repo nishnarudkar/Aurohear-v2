@@ -26,7 +26,8 @@ export type ToneOutcome = 'completed' | 'cancelled';
 /** Everything the runner needs to log and score one presentation. */
 export interface ScheduledTone {
   readonly id: number;
-  readonly ear: Ear;
+  /** 'both' only for binaural setup tones (biological calibration). */
+  readonly ear: Ear | 'both';
   readonly frequencyHz: FrequencyHz;
   /** Level the staircase asked for. */
   readonly requestedLevelDbHl: number;
