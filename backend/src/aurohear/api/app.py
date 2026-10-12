@@ -17,15 +17,15 @@ from sqlalchemy.orm import Session
 
 from aurohear import __version__
 from aurohear.audiometry import PROTOCOL_VERSION
-from aurohear.config import get_settings
+from aurohear.config import Settings, get_settings
 from aurohear.db import make_engine, make_session_factory, session_scope
 from aurohear.services.errors import DomainError
 
 from . import routes
 
 
-def create_app(engine: Engine | None = None) -> FastAPI:
-    settings = get_settings()
+def create_app(engine: Engine | None = None, settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
     engine = engine or make_engine(settings.database_url)
     factory = make_session_factory(engine)
 
@@ -46,6 +46,8 @@ def create_app(engine: Engine | None = None) -> FastAPI:
             allow_methods=["*"],
             allow_headers=["*"],
         )
+
+    app.state.admin_token = settings.admin_token
 
     def get_db() -> Iterator[Session]:
         yield from session_scope(factory)

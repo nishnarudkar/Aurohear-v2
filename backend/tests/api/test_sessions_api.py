@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from aurohear.audiometry import PROTOCOL_VERSION
 from aurohear.db import TrialRow
 from client_sim import API, SimClient, audiogram_of, session_body, threshold_listener
+from conftest import ADMIN
 
 FREQS = (250, 500, 1000, 2000, 3000, 4000, 6000, 8000)
 AUDIOGRAM = {
@@ -317,27 +318,39 @@ INSIGHT = {
     "sentiment": "mixed",
     "emotions": {"frustration": 0.62, "confidence": 0.21},
     "uncertainty": 0.35,
-    "issues": [{"type": "audio", "severity": "medium", "evidence": "tones were very faint at the end"}],
+    "issues": [{"type": "audio_quality", "severity": "medium", "evidence": "tones were very faint at the end"}],
     "intent": "complaint",
 }
 
 
-def test_feedback_and_versioned_insights(client: TestClient) -> None:
+def finished(client: TestClient) -> SimClient:
+    """Feedback is post-test only: a session that has been finalised."""
     sim = SimClient.start(client)
+    sim.finalize()
+    return sim
+
+
+def test_feedback_and_versioned_insights(client: TestClient) -> None:
+    sim = finished(client)
     r = client.post(
         f"{API}/sessions/{sim.session_id}/feedback",
         json={"text": "The tones were very faint at the end, not sure I heard them.", "ratings": {"clarity": 3}, "language": "en"},
     )
     assert r.status_code == 201
     fb = r.json()
-    assert fb["insights"] == []
+    assert set(fb) == {"id", "session_id", "submitted_at"}  # receipt only — no NLP output to the participant
     for version in ("1.4.0", "2.0.0"):  # re-analysis adds a row, never overwrites
-        r = client.post(f"{API}/feedback/{fb['id']}/insights", json={**INSIGHT, "model_version": version})
+        r = client.post(f"{API}/feedback/{fb['id']}/insights", json={**INSIGHT, "model_version": version}, headers=ADMIN)
         assert r.status_code == 201
-    listed = client.get(f"{API}/sessions/{sim.session_id}/feedback").json()
+    listed = client.get(f"{API}/sessions/{sim.session_id}/feedback", headers=ADMIN).json()
     assert len(listed) == 1
-    assert [i["model_version"] for i in listed[0]["insights"]] == ["1.4.0", "2.0.0"]
-    assert listed[0]["insights"][0]["issues"][0]["severity"] == "medium"
+    # built-in analysis first, then the two external model versions
+    assert [i["model_version"] for i in listed[0]["insights"]][1:] == ["1.4.0", "2.0.0"]
+    builtin, external = listed[0]["insights"][0], listed[0]["insights"][1]
+    assert builtin["model_name"] == "aurohear-lexicon-analyzer"
+    assert builtin["issues"] == []  # faint tones are the test working, not a fault
+    assert builtin["uncertainty"] > 0  # "not sure I heard them"
+    assert external["issues"][0]["severity"] == "medium"
 
 
 @pytest.mark.parametrize(
@@ -352,19 +365,19 @@ def test_feedback_and_versioned_insights(client: TestClient) -> None:
     ],
 )
 def test_insight_validation(client: TestClient, patch: dict[str, Any]) -> None:
-    sim = SimClient.start(client)
+    sim = finished(client)
     fb = client.post(f"{API}/sessions/{sim.session_id}/feedback", json={"text": "Fine overall."}).json()
-    assert client.post(f"{API}/feedback/{fb['id']}/insights", json={**INSIGHT, **patch}).status_code == 422
+    assert client.post(f"{API}/feedback/{fb['id']}/insights", json={**INSIGHT, **patch}, headers=ADMIN).status_code == 422
 
 
 def test_feedback_validation_and_404s(client: TestClient) -> None:
-    sim = SimClient.start(client)
+    sim = finished(client)
     url = f"{API}/sessions/{sim.session_id}/feedback"
     assert client.post(url, json={"text": "ok"}).status_code == 422  # < 5 chars
     assert client.post(url, json={"text": "     \n   "}).status_code == 422
     assert client.post(url, json={"text": "Good test.", "ratings": {"clarity": 7}}).status_code == 422
     assert client.post(f"{API}/sessions/{uuid.uuid4()}/feedback", json={"text": "Good test."}).status_code == 404
-    assert client.post(f"{API}/feedback/{uuid.uuid4()}/insights", json=INSIGHT).status_code == 404
+    assert client.post(f"{API}/feedback/{uuid.uuid4()}/insights", json=INSIGHT, headers=ADMIN).status_code == 404
 
 
 # ------------------------------------------------------------------ Prompt 2: probes, inter-octaves, caps

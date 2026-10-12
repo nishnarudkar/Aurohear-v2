@@ -13,9 +13,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
 from aurohear.api.app import create_app
+from aurohear.config import Settings
 from aurohear.db import make_engine
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+ADMIN_TOKEN = "test-admin-token"
+ADMIN = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
 
 
 def alembic_config() -> Config:
@@ -43,5 +46,5 @@ def engine() -> Iterator[Engine]:
 
 @pytest.fixture
 def client(engine: Engine) -> Iterator[TestClient]:
-    with TestClient(create_app(engine)) as c:
+    with TestClient(create_app(engine, Settings(database_url="sqlite://", admin_token=ADMIN_TOKEN))) as c:
         yield c

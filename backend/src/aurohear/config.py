@@ -22,6 +22,8 @@ DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
 class Settings:
     database_url: str
     cors_origins: tuple[str, ...] = DEFAULT_CORS_ORIGINS
+    #: Bearer token for admin-only endpoints (NLP insights). Unset → those endpoints are disabled.
+    admin_token: str | None = None
 
 
 def get_settings() -> Settings:
@@ -31,4 +33,8 @@ def get_settings() -> Settings:
         cors_origins = tuple(o.strip() for o in raw_cors.split(",") if o.strip())
     else:
         cors_origins = DEFAULT_CORS_ORIGINS
-    return Settings(database_url=db_url, cors_origins=cors_origins)
+    return Settings(
+        database_url=db_url,
+        cors_origins=cors_origins,
+        admin_token=os.environ.get("AUROHEAR_ADMIN_TOKEN") or None,
+    )

@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Iterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 
 from aurohear.schemas import (
     AbortRequest,
     FeedbackCreate,
     FeedbackOut,
+    FeedbackReceipt,
     NlpInsightCreate,
     NlpInsightOut,
     SessionCreate,
+    SessionInsightsOut,
     SessionResults,
     SessionState,
     TrialAccepted,
@@ -23,6 +26,7 @@ from aurohear.schemas import (
     TrialOut,
 )
 from aurohear.services import feedback, results, sessions
+from aurohear.services.errors import DomainError
 
 
 def get_db() -> Iterator[Session]:  # replaced by create_app via dependency_overrides
@@ -32,6 +36,30 @@ def get_db() -> Iterator[Session]:  # replaced by create_app via dependency_over
 
 Db = Annotated[Session, Depends(get_db)]
 router = APIRouter()
+
+
+class AdminRequired(DomainError):
+    status_code = 401
+    code = "admin_required"
+
+
+class AdminDisabled(DomainError):
+    status_code = 403
+    code = "admin_disabled"
+
+
+def require_admin(request: Request, authorization: Annotated[str | None, Header()] = None) -> None:
+    """NLP insights are admin-only (NLP module doc, Access Control). Bearer token from
+    AUROHEAR_ADMIN_TOKEN; with no token configured the admin endpoints are disabled."""
+    token: str | None = request.app.state.admin_token
+    if not token:
+        raise AdminDisabled("admin endpoints are disabled: set AUROHEAR_ADMIN_TOKEN")
+    supplied = (authorization or "").removeprefix("Bearer ").strip()
+    if not secrets.compare_digest(supplied.encode(), token.encode()):
+        raise AdminRequired("a valid admin bearer token is required")
+
+
+Admin = Depends(require_admin)
 
 
 # ------------------------------------------------------------------ sessions
@@ -91,18 +119,32 @@ def get_results(session_id: UUID, db: Db) -> SessionResults:
 # ------------------------------------------------------------------ qualitative / NLP
 
 
-@router.post("/sessions/{session_id}/feedback", status_code=status.HTTP_201_CREATED, tags=["feedback"])
-def create_feedback(session_id: UUID, body: FeedbackCreate, db: Db) -> FeedbackOut:
-    """Store the participant's free-text self-report."""
+@router.post(
+    "/sessions/{session_id}/feedback",
+    status_code=status.HTTP_201_CREATED,
+    tags=["feedback"],
+    responses={409: {"description": "The test is still in progress (feedback is post-test only)"}},
+)
+def create_feedback(session_id: UUID, body: FeedbackCreate, db: Db) -> FeedbackReceipt:
+    """Store the participant's free-text self-report (after the test) and analyse it.
+    Returns a receipt only — NLP results are never shown to the participant."""
     return feedback.create_feedback(db, session_id, body)
 
 
-@router.get("/sessions/{session_id}/feedback", tags=["feedback"])
+@router.get("/sessions/{session_id}/feedback", tags=["admin"], dependencies=[Admin])
 def list_feedback(session_id: UUID, db: Db) -> list[FeedbackOut]:
+    """Admin: feedback text with all insights."""
     return feedback.list_feedback(db, session_id)
 
 
-@router.post("/feedback/{feedback_id}/insights", status_code=status.HTTP_201_CREATED, tags=["feedback"])
+@router.get("/sessions/{session_id}/insights", tags=["admin"], dependencies=[Admin])
+def list_insights(session_id: UUID, db: Db) -> SessionInsightsOut:
+    """Admin: NLP insights for a session, with the symptom ↔ audiometry correlation
+    (a research annotation; it never changes the clinical result)."""
+    return feedback.list_insights(db, session_id)
+
+
+@router.post("/feedback/{feedback_id}/insights", status_code=status.HTTP_201_CREATED, tags=["admin"], dependencies=[Admin])
 def add_insight(feedback_id: UUID, body: NlpInsightCreate, db: Db) -> NlpInsightOut:
-    """Store a versioned NLP analysis of one feedback entry (append-only)."""
+    """Admin: store a versioned analysis from an external NLP model (append-only)."""
     return feedback.add_insight(db, feedback_id, body)
