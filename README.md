@@ -105,6 +105,15 @@ Pixel-perfect SVG visualization and export matching spec §8 and clinical practi
 * **Dual Presentation Modes**: Normal mode shading the WHO normal range (−10 to 20 dB HL); Clinician mode displaying $\pm\sigma_{\text{PTA}}$ error bars and historical search iterations (I/R/V).
 * **Accessibility & High-Resolution Export**: Light/dark themes exceeding WCAG AAA contrast ($\ge 7:1$ text, $\ge 4.5:1$ markers), semantic screen-reader descriptions, standalone SVG export, and 3× PNG rasterization (1944×2124 px).
 
+### 6. Clinical Screen Flow & Application UI (`frontend/src/app/`, `frontend/src/calibration/`)
+End-to-end user experience strictly adhering to clinical gating rules:
+* **Application State Machine (`appFlowMachine.ts`)**: Strict linear flow (`welcome` → `intake` → `device` → `calibration` → `instructions` → `testing` → `results`). Screens cannot be skipped, and clinical red flags terminate the session immediately with an ENT/physician referral.
+* **Intake & Medical Red-Flag Screening (`IntakeScreen.tsx`, `intake.ts`)**: Evaluates unilateral symptoms, sudden hearing loss, ear discharge, pain, dizziness, and recent acoustic trauma. Asks noise exposure in past 24h, tinnitus, difficulty in noise, and subjective better ear.
+* **Transducer & Channel Check (`DeviceScreen.tsx`)**: Transducer selection, Bluetooth name detection and blocking, mandatory wired and ANC-disabled checkboxes, followed by an interactive channel verification tone catching reversed headphones.
+* **Tier C Biological Loudness Matching (`CalibrationScreen.tsx`, `frontend/src/calibration/`)**: Spec §3.2 procedure presenting alternating 1 kHz tones (5 dB apart) in both ears until only the louder tone is heard. Triplicate evaluation (rejected if spread $> 5\text{ dB}$), with 250 Hz and 4 kHz checks against the model, clamped at −30 dBFS.
+* **Zero Visual Cue Test Runner (`TestRunnerScreen.tsx`, `ResponseButton.tsx`)**: Touch/click button ($\ge 96\text{ px}$) and Space/Enter listener. HTML and visual styles remain 100% byte-identical whether a tone is playing or not (spec §7.4). Hardware event timestamps (`event.timeStamp`) are passed directly to latency calculators.
+* **Accessibility & Theme System (`styles.css`)**: Light and dark themes engineered for WCAG AAA contrast ($\ge 7:1$ text, $\ge 4.5:1$ UI components) with zero animations or transitions across the testing workflow.
+
 ---
 
 ## Empirical & Statistical Validation
@@ -115,6 +124,7 @@ The algorithms have been subjected to extensive simulation and property testing:
 | :--- | :--- | :--- |
 | **Audiogram Aspect Ratio** | Log₂ frequency vs linear dB scale geometry | **Exact 1 octave = 20 dB** maintained across all viewport scales |
 | **Audiogram Theme Contrast** | Automated luminance ratio verification | **WCAG AAA compliant** ($\ge 7:1$ text, $\ge 4.5:1$ ear symbols) |
+| **Zero Visual Cue Invariant** | Byte-identical HTML snapshot comparison during tone playback | **100% byte-identical DOM** across 180+ sampled intervals |
 | **Dual Engine Conformance** | 180 golden reference traces (42,000+ presentations) | **100% exact parity** across all tones, reverse steps, and thresholds |
 | **Network Outage Tolerance** | Full session with simulated mid-test network blackout | Zero testing stalls; 100% outbox drain and server agreement post-reconnect |
 | **Termination Safety** | Hypothesis property testing (unbounded responses) | Terminates in $\le 25$ presentations per frequency; never hangs |
@@ -132,40 +142,47 @@ The algorithms have been subjected to extensive simulation and property testing:
 
 ```text
 Aurohear-v2/
-├── backend/                       # Python clinical threshold engine
+├── backend/                       # Python clinical threshold engine & API
 │   ├── pyproject.toml             # Packaging, Pydantic, pytest, and Hypothesis setup
 │   ├── src/aurohear/
-│   │   └── audiometry/
-│   │       ├── familiarisation.py # §6.2 familiarisation sequence
-│   │       ├── levels.py          # 5 dB HL lattice (-10 to 90 dB HL)
-│   │       ├── models.py          # Strict Pydantic v2 schemas
-│   │       ├── protocol.py        # ASHA 2005 sequence & 1 kHz retest validation
-│   │       ├── simulation.py      # Synthetic listeners (ideal, psychometric, shifting)
-│   │       └── staircase.py       # Hughson-Westlake 10-down/5-up staircase
-│   └── tests/                     # Test bench (unit, property, Monte Carlo)
-│       ├── test_accuracy_montecarlo.py # 2,000-listener validation study
-│       ├── test_familiarisation.py
-│       ├── test_levels.py
-│       ├── test_protocol.py
-│       ├── test_protocol_properties.py
-│       ├── test_staircase.py
-│       └── test_staircase_properties.py
+│   │   ├── api/                   # FastAPI endpoints, CORS, and lifespan
+│   │   ├── audiometry/
+│   │   │   ├── familiarisation.py # §6.2 familiarisation sequence
+│   │   │   ├── levels.py          # 5 dB HL lattice (-10 to 90 dB HL)
+│   │   │   ├── models.py          # Strict Pydantic v2 schemas
+│   │   │   ├── protocol.py        # ASHA 2005 sequence & 1 kHz retest validation
+│   │   │   ├── qc_probe.py        # Post-threshold QC probes
+│   │   │   ├── simulation.py      # Synthetic listeners (ideal, psychometric, shifting)
+│   │   │   └── staircase.py       # Hughson-Westlake 10-down/5-up staircase
+│   │   ├── db/                    # SQLAlchemy models & migrations
+│   │   └── services/              # Clinical classification, QUALIND, and reporting
+│   └── tests/                     # Test bench (unit, property, Monte Carlo, API)
 │
-├── frontend/                      # Web Audio tone generation subsystem
-│   ├── package.json               # TypeScript 5, Vitest 5, fast-check
+├── frontend/                      # Web Audio tone generation & React UI
+│   ├── package.json               # TypeScript 5, React 19, Vite, XState v5, Vitest
 │   ├── tsconfig.json
-│   ├── src/audio/
-│   │   ├── ToneStimulusEngine.ts  # Web Audio synthesis & routing graph
-│   │   ├── calibration.ts         # dB HL to linear gain conversion & safety cap
-│   │   ├── envelope.ts            # Hann rise/fall curve generation
-│   │   ├── timing.ts              # Randomized stimulus & ISI timers
-│   │   └── types.ts               # Audio interfaces & type definitions
-│   └── tests/                     # Acoustic rendering validation suite
-│       ├── ToneStimulusEngine.test.ts # Crosstalk, splatter, and gain tests
-│       ├── calibration.test.ts
-│       ├── envelope.test.ts
-│       ├── timing.test.ts
-│       └── helpers.ts
+│   ├── vite.config.ts
+│   ├── index.html
+│   ├── src/
+│   │   ├── main.tsx               # Application bootstrap
+│   │   ├── app/                   # Clinical screen flow & components
+│   │   │   ├── App.tsx
+│   │   │   ├── appFlowMachine.ts  # Linear flow XState machine
+│   │   │   ├── screens/           # Welcome, Intake, Device, Calibration, Instructions, Runner, Results
+│   │   │   ├── components/        # Zero-cue ResponseButton, layout components
+│   │   │   └── styles.css         # WCAG AAA theme system
+│   │   ├── calibration/           # Tier C biological calibration routines
+│   │   ├── audio/                 # Web Audio synthesis, Hann envelope, & routing graph
+│   │   ├── audiogram/             # Standards-compliant SVG audiogram renderer
+│   │   ├── engine/                # Client-side audiometry engine port
+│   │   ├── session/               # Hughson-Westlake test runner state machine
+│   │   └── api/                   # Backend API adapter & IndexedDB outbox
+│   └── tests/                     # Comprehensive frontend test suites
+│       ├── audio/                 # Web Audio node & acoustic tests
+│       ├── audiogram/             # SVG geometry, contrast, and export tests
+│       ├── engine/                # Golden traces & engine conformance
+│       ├── session/               # Test runner state machine tests
+│       └── app/                   # Screen flow & zero-visual-cue tests
 │
 ├── docs/                          # Clinical specifications and gap analyses
 │   ├── Browser_audiometry_digitization_spec.md
@@ -178,7 +195,7 @@ Aurohear-v2/
 
 ## Quickstart & Testing
 
-### Backend Engine
+### Backend Engine & API Server
 
 **Prerequisites**: Python 3.11+
 
@@ -193,11 +210,14 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies in editable mode
 pip install -e ".[dev]"
 
-# Run full test suite (unit + property-based + Monte Carlo)
+# Run full test suite (unit + property-based + Monte Carlo + API)
 python -m pytest -q
+
+# Start FastAPI development server
+python -m uvicorn aurohear.api.app:create_app --factory --app-dir src --port 8000
 ```
 
-### Frontend Audio Engine
+### Frontend Audio Engine & Web Application
 
 **Prerequisites**: Node.js 18+ (Node 20+ recommended)
 
@@ -211,8 +231,11 @@ npm install
 # Run static type check
 npm run typecheck
 
-# Execute offline audio rendering test suite
+# Execute frontend test suites (audio, engine, audiogram, and UI)
 npm test
+
+# Launch Vite development server
+npm run dev
 ```
 
 ---
@@ -233,6 +256,7 @@ npm test
 - [x] **Phase 3: Client State Machine (FSM) & API Adapter**: Completed with XState v5 test runner, timestamped window scoring, catch-trial distribution, transition audit logging, and `ApiSessionClient` ([`frontend/src/session/`](frontend/src/session/), [`frontend/src/api/`](frontend/src/api/)).
 - [x] **Clinical Classification & Probabilistic Uncertainty**: Completed with WHO (2021) grading, BSA (2018) descriptors, Masalski $\sigma$-tier likelihood model, and mandatory clinical referral overrides ([`backend/src/aurohear/services/classification.py`](backend/src/aurohear/services/classification.py)).
 - [x] **Standards-Compliant Audiogram Renderer**: Completed with exact 1-octave=20dB geometry, ASHA symbology, WHO/Clinician modes, WCAG AAA themes, and 3× PNG/SVG export ([`frontend/src/audiogram/`](frontend/src/audiogram/)).
+- [x] **Clinical Screen Flow & App State Machine**: Completed with XState `appFlowMachine`, red-flag gate, headphone & channel verification, Tier C calibration, zero-visual-cue test runner, and WCAG AAA themes ([`frontend/src/app/`](frontend/src/app/)).
 - [ ] **Phase 4: Ambient Noise & Hardware Watchdog**: Ambient room noise gating via `AnalyserNode` and headphone unplug detection.
 - [ ] **Phase 5: Clinical Validation Study**: Multi-site comparative trial benchmarking AuroHear v2 against certified clinical audiometers.
 
