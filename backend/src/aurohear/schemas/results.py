@@ -38,6 +38,12 @@ class ThresholdResultOut(OutputModel):
     floor_limited: bool = Field(description="Threshold ≤ −10 dB HL (lattice floor)")
     clamp_events: int
     is_accepted: bool = Field(description="The value reported on the audiogram for this ear × frequency")
+    is_interoctave: bool = Field(description="Inserted by the ≥ 20 dB inter-octave rule (spec §6.4)")
+    qc_probe_at_threshold_heard: bool | None
+    qc_probe_plus5_heard: bool | None
+    qc_probe_pass: bool | None = Field(
+        description="Spec §6.3: false = no response at threshold + 5 dB; null = not probed"
+    )
     possible_shadow: bool = Field(
         description="Interaural Δ ≥ 40 dB, poorer ear, unmasked: possible cross-hearing (spec §1.3)"
     )
@@ -61,6 +67,11 @@ class QualityMetricsOut(OutputModel):
     unresolved_thresholds: int
     no_response_thresholds: int
     possible_shadow_count: int
+    qc_probes: int = Field(description="Thresholds probed at threshold + 5 dB")
+    qc_probe_failures: int
+    qc_probe_fail_rate: float | None = Field(
+        description="QUALIND #7: non-responses at threshold + 5 dB ÷ thresholds probed"
+    )
     protocol_complete: bool
     computed_at: datetime
 

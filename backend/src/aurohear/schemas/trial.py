@@ -64,8 +64,6 @@ class TrialCreate(InputModel):
             errors.append("timestamps must be finite")
         if self.frequency_hz not in SUPPORTED_FREQUENCIES_HZ:
             errors.append(f"frequency_hz {self.frequency_hz} is not an audiometric test frequency")
-        if self.phase is Phase.QC_PROBE:
-            errors.append("qc_probe trials are not supported by this protocol version yet")
         # Catch trials are silent.
         if self.is_catch_trial != (self.phase is Phase.CATCH):
             errors.append("is_catch_trial must be true exactly when phase is 'catch'")

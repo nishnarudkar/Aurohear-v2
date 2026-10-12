@@ -71,6 +71,9 @@ def create_session(db: Session, body: SessionCreate) -> SessionState:
         supervision=body.supervision,
         better_ear=body.better_ear.value if body.better_ear else None,
         profile_cap_db_hl=body.profile_cap_db_hl,
+        frequency_caps_db_hl=(
+            {str(f): v for f, v in sorted(body.frequency_caps_db_hl.items())} if body.frequency_caps_db_hl else None
+        ),
         status=SessionStatus.IN_PROGRESS.value,
         client_time_origin_ms=body.client_time_origin_ms,
         device=body.device.model_dump(mode="json"),

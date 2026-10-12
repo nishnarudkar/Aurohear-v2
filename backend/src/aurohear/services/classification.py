@@ -164,6 +164,7 @@ class QcInputs:
     discarded_trials: int
     tone_trials: int
     ambient_exceedance_rate: float | None = None  # §5 / §10 #10 — not measured yet
+    qc_probe_fail_rate: float | None = None  # §10 #7
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,7 +344,8 @@ def qc_composite(qc: QcInputs) -> tuple[QcComposite, list[str]]:
 
     Poor: protocol not finished · catch-trial false-alarm rate > 20 % ·
           ≥ 2 unresolved thresholds · ambient exceedance > 15 % of trials (§9.2 Step 4)
-    Fair: false-alarm rate > 10 % · 1 unresolved threshold · > 15 % trials discarded
+    Fair: false-alarm rate > 10 % · 1 unresolved threshold · > 15 % trials discarded ·
+          any QC-probe failure (no response at threshold + 5 dB, §6.3)
     """
     poor: list[str] = []
     fair: list[str] = []
@@ -359,6 +361,8 @@ def qc_composite(qc: QcInputs) -> tuple[QcComposite, list[str]]:
         fair.append("1 threshold could not be resolved")
     if qc.ambient_exceedance_rate is not None and qc.ambient_exceedance_rate > 0.15:
         poor.append(f"ambient noise over limit on {qc.ambient_exceedance_rate:.0%} of trials (> 15%)")
+    if qc.qc_probe_fail_rate:
+        fair.append(f"no response at threshold + 5 dB on {qc.qc_probe_fail_rate:.0%} of quality-check probes")
     total = qc.tone_trials + qc.discarded_trials
     if total and qc.discarded_trials / total > 0.15:
         fair.append(f"{qc.discarded_trials} trials discarded (> 15%)")

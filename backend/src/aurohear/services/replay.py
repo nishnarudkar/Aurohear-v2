@@ -52,6 +52,8 @@ class SessionParams(Protocol):
     def better_ear(self) -> str | None: ...
     @property
     def profile_cap_db_hl(self) -> int: ...
+    @property
+    def frequency_caps_db_hl(self) -> dict[str, float] | None: ...
 
 
 class ReplayError(RuntimeError):
@@ -76,8 +78,11 @@ def mismatch(expected: Presentation, trial: ReplayableTrial) -> list[str]:
 
 def new_protocol(session: SessionParams) -> AudiometryProtocol:
     better = Ear(session.better_ear) if session.better_ear else None
+    caps = {int(f): float(v) for f, v in (session.frequency_caps_db_hl or {}).items()}
     return AudiometryProtocol(
-        better_ear=better, lattice=LevelLattice(ceiling=session.profile_cap_db_hl)
+        better_ear=better,
+        lattice=LevelLattice(ceiling=session.profile_cap_db_hl),
+        frequency_caps_db_hl=caps,
     )
 
 

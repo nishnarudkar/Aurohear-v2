@@ -89,6 +89,10 @@ def _row(session_id: UUID, r: ThresholdResult, index: int, accepted: bool, shado
         clamp_events=r.clamp_events,
         is_accepted=accepted,
         possible_shadow=shadow,
+        is_interoctave=r.is_interoctave,
+        qc_probe_at_threshold_heard=r.qc_probe_at_threshold_heard,
+        qc_probe_plus5_heard=r.qc_probe_plus5_heard,
+        qc_probe_pass=r.qc_probe_pass,
     )
 
 
@@ -106,6 +110,9 @@ def _quality_row(
     latencies = [t.response_latency_ms for t in tones if t.response_latency_ms is not None]
     accepted = [t for t in thresholds if t.is_accepted]
     first = ears[0] if ears else None
+    # QUALIND #7 over every search that could be probed at threshold + 5 dB.
+    probed = [t for t in thresholds if t.qc_probe_pass is not None]
+    probe_failures = sum(not t.qc_probe_pass for t in probed)
     return QualityMetricsRow(
         session_id=session_id,
         tone_trials=len(tones),
@@ -123,6 +130,9 @@ def _quality_row(
         unresolved_thresholds=sum(t.status == ThresholdStatus.UNRESOLVED.value for t in accepted),
         no_response_thresholds=sum(t.status == ThresholdStatus.NO_RESPONSE.value for t in accepted),
         possible_shadow_count=sum(t.possible_shadow for t in thresholds),
+        qc_probes=len(probed),
+        qc_probe_failures=probe_failures,
+        qc_probe_fail_rate=probe_failures / len(probed) if probed else None,
         protocol_complete=protocol_complete,
     )
 
@@ -211,6 +221,7 @@ def _classify(
         unresolved_thresholds=quality.unresolved_thresholds,
         discarded_trials=quality.discarded_trials,
         tone_trials=quality.tone_trials,
+        qc_probe_fail_rate=quality.qc_probe_fail_rate,
     )
     tier = CalibrationTier(row.calibration["tier"])
     # Intake (red flags, noise exposure, difficulty in noise) is not collected yet.

@@ -16,7 +16,9 @@ from pydantic import (
     field_validator,
 )
 
-from .common import Ear, InputModel, OutputModel, Phase, SearchRole
+import math
+
+from .common import SUPPORTED_FREQUENCIES_HZ, Ear, InputModel, OutputModel, Phase, SearchRole
 
 
 class SessionStatus(StrEnum):
@@ -87,6 +89,11 @@ class SessionCreate(InputModel):
     profile_cap_db_hl: StrictInt = Field(
         default=90, description="Headphone profile ceiling, ≤ 90 dB HL (spec §3.4)"
     )
+    frequency_caps_db_hl: dict[int, StrictFloat] | None = Field(
+        default=None,
+        description="Transducer profile maximum per frequency (spec §3.4), e.g. {'8000': 84}. "
+        "Floored to the 5 dB grid and capped at profile_cap_db_hl by the engine.",
+    )
     client_time_origin_ms: StrictFloat | None = Field(
         default=None,
         description="performance.timeOrigin (Unix ms): maps client *_ms clocks to wall time",
@@ -94,6 +101,18 @@ class SessionCreate(InputModel):
     device: DeviceInfo
     calibration: CalibrationInfo
     environment: EnvironmentInfo | None = None
+
+    @field_validator("frequency_caps_db_hl")
+    @classmethod
+    def _caps_valid(cls, v: dict[int, float] | None) -> dict[int, float] | None:
+        if v is None:
+            return v
+        for f, cap in v.items():
+            if f not in SUPPORTED_FREQUENCIES_HZ:
+                raise ValueError(f"{f} Hz is not an audiometric test frequency")
+            if not math.isfinite(cap) or math.floor(cap / 5) * 5 <= -10:
+                raise ValueError(f"cap {cap} dB HL at {f} Hz leaves no testable range")
+        return v
 
     @field_validator("profile_cap_db_hl")
     @classmethod
@@ -126,6 +145,7 @@ class SessionOut(OutputModel):
     supervision: str
     better_ear: Ear | None
     profile_cap_db_hl: int
+    frequency_caps_db_hl: dict[int, float] | None
     status: SessionStatus
     abort_reason: AbortReason | None
     client_time_origin_ms: float | None

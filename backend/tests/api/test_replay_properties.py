@@ -14,7 +14,8 @@ from client_sim import SimClient, audiogram_of, threshold_listener
 from conftest import migrated_engine
 from fastapi.testclient import TestClient
 
-FREQS = (250, 500, 1000, 2000, 3000, 4000, 6000, 8000)
+# Include the conditional inter-octaves: the server inserts them when the rule fires.
+FREQS = (250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000)
 grid = st.sampled_from(range(-10, 101, 5))
 audiograms = st.fixed_dictionaries(
     {ear: st.fixed_dictionaries({f: grid for f in FREQS}) for ear in ("right", "left")}

@@ -292,7 +292,6 @@ def test_session_validation(client: TestClient, patch: dict[str, Any]) -> None:
         ("non audiometric frequency", {"frequency_hz": 1234}),
         ("catch with level", {"is_catch_trial": True, "phase": "catch"}),
         ("catch flag without phase", {"is_catch_trial": True, "level_db_hl": None, "presented_level_db_hl": None}),
-        ("qc probe", {"phase": "qc_probe"}),
         ("latency without response", {"responded": False}),
         ("response without latency", {"response_latency_ms": None}),
         ("latency inconsistent", {"response_latency_ms": 999.0}),
@@ -366,3 +365,84 @@ def test_feedback_validation_and_404s(client: TestClient) -> None:
     assert client.post(url, json={"text": "Good test.", "ratings": {"clarity": 7}}).status_code == 422
     assert client.post(f"{API}/sessions/{uuid.uuid4()}/feedback", json={"text": "Good test."}).status_code == 404
     assert client.post(f"{API}/feedback/{uuid.uuid4()}/insights", json=INSIGHT).status_code == 404
+
+
+# ------------------------------------------------------------------ Prompt 2: probes, inter-octaves, caps
+
+
+FREQS_ALL = (250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000)
+
+
+def flat_all(level: int) -> dict[str, dict[int, int]]:
+    return {ear: {f: level for f in FREQS_ALL} for ear in ("right", "left")}
+
+
+def test_qc_probes_run_over_http_and_feed_qualind_7(client: TestClient) -> None:
+    sim = SimClient.start(client)
+    sim.run(threshold_listener(flat_all(30)))
+    probes = [b for b in sim.posted if b["phase"] == "qc_probe"]
+    res = sim.finalize()
+    assert len(probes) == 2 * len(res["thresholds"])  # threshold and +5 dB after every search
+    assert {b["level_db_hl"] for b in probes} == {30, 35}
+    assert all(t["qc_probe_pass"] is True for t in res["thresholds"])
+    q = res["quality_metrics"]
+    assert q["qc_probes"] == len(res["thresholds"]) and q["qc_probe_failures"] == 0
+    assert q["qc_probe_fail_rate"] == 0.0
+    assert audiogram_of(res)["right"][1000] == 30  # probes never move a threshold
+
+
+def test_missed_plus5_probes_are_qc_failures(client: TestClient) -> None:
+    base = threshold_listener(flat_all(30))
+    sim = SimClient.start(client)
+    sim.run(lambda p: False if p["phase"] == "qc_probe" and p["level_db_hl"] == 35 else base(p))
+    res = sim.finalize()
+    q = res["quality_metrics"]
+    assert q["qc_probe_fail_rate"] == 1.0 and q["qc_probe_failures"] == q["qc_probes"] > 0
+    assert all(t["qc_probe_pass"] is False for t in res["thresholds"])
+    assert res["classification"]["qc_composite"] == "fair"
+    assert any("threshold + 5 dB" in a for a in res["classification"]["annotations"])
+
+
+def test_probe_when_a_tone_is_expected_is_a_conflict(client: TestClient) -> None:
+    sim = SimClient.start(client)
+    wrong = {**sim.next_presentation, "phase": "qc_probe"}  # type: ignore[dict-item]
+    r = sim.post(sim.trial_body(wrong, responded=True))
+    assert r.status_code == 409
+    assert any("phase" in m for m in r.json()["error"]["mismatches"])
+
+
+def test_inter_octave_is_inserted_and_flagged_over_http(client: TestClient) -> None:
+    aud = flat_all(10)
+    for ear in ("right", "left"):
+        aud[ear][2000] = 40  # |1000 − 2000| = 30 → 1500 Hz
+        aud[ear][1500] = 25
+    sim = SimClient.start(client)
+    sim.run(threshold_listener(aud))
+    res = sim.finalize()
+    by = {(t["ear"], t["frequency_hz"]): t for t in res["audiogram"]}
+    for ear in ("right", "left"):
+        assert by[(ear, 1500)]["is_interoctave"] is True
+        assert by[(ear, 1500)]["threshold_db_hl"] == 25
+        assert (ear, 750) not in by
+        assert by[(ear, 2000)]["is_interoctave"] is False
+
+
+def test_per_frequency_caps_are_enforced_server_side(client: TestClient) -> None:
+    aud = flat_all(20)
+    for ear in ("right", "left"):
+        aud[ear][8000] = 85
+    sim = SimClient.start(client, frequency_caps_db_hl={"8000": 84, "250": 70.0})
+    sim.run(threshold_listener(aud))
+    assert max(b["level_db_hl"] for b in sim.posted if b["frequency_hz"] == 8000) == 80
+    res = sim.finalize()
+    assert res["session"]["frequency_caps_db_hl"] == {"250": 70.0, "8000": 84.0}
+    nr = [t for t in res["audiogram"] if t["frequency_hz"] == 8000]
+    assert all(t["status"] == "no_response" and t["threshold_db_hl"] == 80 for t in nr)
+
+
+@pytest.mark.parametrize(
+    "caps",
+    [{"1234": 80}, {"8000": -12}, {"8000": "84"}, {"8000": None}, {"loud": 80}],
+)
+def test_frequency_caps_validation(client: TestClient, caps: dict[str, Any]) -> None:
+    assert client.post(f"{API}/sessions", json=session_body(frequency_caps_db_hl=caps)).status_code == 422
