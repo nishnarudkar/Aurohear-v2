@@ -71,7 +71,9 @@ A pure, event-driven core isolated from audio I/O and wall-clocks:
 * **Clinical Models (`models.py`)**: Immutable Pydantic v2 domain schemas for `Presentation`, `StaircaseTrial`, `ThresholdResult`, and `ProtocolResult`. Enforces clinical validity at object creation.
 * **Modified Hughson–Westlake (`staircase.py`)**: Strict 10 dB down on response, 5 dB up on non-response. Only ascending runs count toward threshold calculation.
 * **Familiarisation (`familiarisation.py`)**: §6.2 procedure starting at 40 dB HL with stepped ascent until two consecutive responses at the same level.
-* **ASHA 2005 Sequence (`protocol.py`)**: Order: 1000 Hz → 2000 → 3000 → 4000 → 6000 → 8000 → 1000 (retest) → 500 → 250 Hz. Completes better ear (or right if equal) before testing contralateral ear.
+* **ASHA 2005 Sequence & Inter-Octaves (`protocol.py`)**: Standard order (1000 → 2000 → 3000 → 4000 → 6000 → 8000 → 1000 retest → 500 → 250 Hz) with dynamic inter-octave insertion (750 Hz and 1500 Hz on $\ge 20\text{ dB}$ adjacent octave difference per §6.4).
+* **Quality Check (QC) Probes (`qc_probe.py`)**: Post-threshold confirmation tones at threshold and threshold + 5 dB, calculating probe fail rates for QUALIND indicator #7.
+* **Per-Frequency Headphone Ceilings**: Synchronized hardware caps between client profile and backend engine lattices, preventing clipping mismatches.
 
 ### 2. Acoustic Stimulus Engine (`frontend/src/audio`)
 High-precision audio synthesis built on standard Web Audio primitives:
