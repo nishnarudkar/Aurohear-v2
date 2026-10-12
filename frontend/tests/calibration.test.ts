@@ -5,6 +5,7 @@ import {
   ABSOLUTE_MAX_DB_HL,
   type CalibrationProfile,
   ceilingDbHl,
+  frequencyCapsDbHl,
   dbHlToLinearGain,
   maxAchievableDbHl,
   resolveLevel,
@@ -67,5 +68,14 @@ describe('output ceiling and clamping (spec §3.4, QC indicator 13)', () => {
     const partial: CalibrationProfile = { ...TEST_PROFILE, etsplDbSpl: { 1000: 10 } };
     expect(() => resolveLevel(partial, 2000, 40)).toThrow(/missing etsplDbSpl at 2000 Hz/);
     expect(() => resolveLevel(partial, 1000, 40)).not.toThrow();
+  });
+});
+
+describe('per-frequency caps for the API (spec §3.4)', () => {
+  it('reports each frequency ceiling, keyed by Hz', () => {
+    const caps = frequencyCapsDbHl(TEST_PROFILE, SUPPORTED_FREQUENCIES_HZ);
+    expect(caps['8000']).toBe(84);
+    expect(caps['1000']).toBe(90);
+    expect(Object.keys(caps)).toHaveLength(SUPPORTED_FREQUENCIES_HZ.length);
   });
 });

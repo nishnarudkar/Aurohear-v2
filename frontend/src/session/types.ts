@@ -11,7 +11,8 @@ import type { Ear } from '../audio/types';
 export type { Ear };
 
 /** Mirrors backend `Phase` (spec §12.1 Trial.phase). */
-export type StaircasePhase = 'familiarisation' | 'descent' | 'ascent';
+/** 'qc_probe': re-presentation at threshold / threshold + 5 dB after a search (spec §6.3). */
+export type StaircasePhase = 'familiarisation' | 'descent' | 'ascent' | 'qc_probe';
 export type TrialPhase = StaircasePhase | 'catch';
 
 /** Mirrors backend `SearchRole`. */

@@ -17,7 +17,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 export const isUuid = (s: string): boolean => UUID_RE.test(s);
 
 const EARS = new Set(['left', 'right']);
-const PHASES = new Set(['familiarisation', 'descent', 'ascent']);
+const PHASES = new Set(['familiarisation', 'descent', 'ascent', 'qc_probe']);
 const ROLES = new Set(['initial', 'retest', 'verification']);
 
 /** The trial log entry → POST /sessions/{id}/trials body. */

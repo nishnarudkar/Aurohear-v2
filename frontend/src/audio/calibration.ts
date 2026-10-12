@@ -73,6 +73,19 @@ export function ceilingDbHl(profile: CalibrationProfile, f: FrequencyHz): number
   return Math.min(maxAchievableDbHl(profile, f), safe, ABSOLUTE_MAX_DB_HL);
 }
 
+/**
+ * Per-frequency output ceilings for the session (spec §3.4), in the shape the API takes
+ * (`SessionCreate.frequency_caps_db_hl`). The server floors each value to the 5 dB grid,
+ * so its staircase never requests a level this profile cannot deliver — instead of the
+ * audio engine silently clamping it (which would record a response at the wrong level).
+ */
+export function frequencyCapsDbHl(
+  profile: CalibrationProfile,
+  frequencies: readonly FrequencyHz[],
+): Record<string, number> {
+  return Object.fromEntries(frequencies.map((f) => [String(f), ceilingDbHl(profile, f)]));
+}
+
 export function dbHlToLinearGain(profile: CalibrationProfile, f: FrequencyHz, dbHl: number): number {
   const exponent =
     dbHl +

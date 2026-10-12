@@ -42,6 +42,11 @@ export interface SessionCreateDto {
   readonly supervision: 'unsupervised' | 'technician' | 'clinician';
   readonly better_ear?: Ear | null;
   readonly profile_cap_db_hl?: number;
+  /**
+   * Maximum deliverable dB HL per frequency (spec §3.4), keyed by Hz. Build it with
+   * `frequencyCapsDbHl(profile)` so the server engine and the audio engine agree.
+   */
+  readonly frequency_caps_db_hl?: Readonly<Record<string, number>> | null;
   readonly client_time_origin_ms?: number | null;
   readonly device: DeviceInfoDto;
   readonly calibration: CalibrationInfoDto;

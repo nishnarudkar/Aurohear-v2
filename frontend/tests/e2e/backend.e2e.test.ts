@@ -48,11 +48,12 @@ const freePort = (): Promise<number> =>
 
 const sleepReal = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-const FREQS = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000] as const;
+// Right ear: |1000 − 2000| = 20 dB → the server inserts 1500 Hz (spec §6.4).
 const AUDIOGRAM: Record<Ear, Record<number, number>> = {
-  right: { 250: 10, 500: 15, 1000: 20, 2000: 30, 3000: 45, 4000: 60, 6000: 75, 8000: 85 },
-  left: { 250: 0, 500: 5, 1000: 5, 2000: 10, 3000: 20, 4000: 35, 6000: 50, 8000: 70 },
+  right: { 250: 10, 500: 15, 750: 15, 1000: 20, 1500: 30, 2000: 40, 3000: 45, 4000: 60, 6000: 75, 8000: 85 },
+  left: { 250: 0, 500: 5, 750: 5, 1000: 5, 1500: 5, 2000: 10, 3000: 20, 4000: 35, 6000: 50, 8000: 70 },
 };
+const OCTAVES = [250, 500, 1000, 2000, 3000, 4000, 6000, 8000] as const;
 
 const SESSION: SessionCreateDto = {
   participant_id: randomUUID(),
@@ -137,8 +138,15 @@ describe.skipIf(skipReason !== null)('frontend FSM <-> API <-> engine (real back
     const got: Record<string, Record<number, number | null>> = { right: {}, left: {} };
     for (const t of res.audiogram) got[t.ear]![t.frequency_hz] = t.threshold_db_hl;
     for (const ear of ['right', 'left'] as const) {
-      for (const f of FREQS) expect(got[ear]![f], `${ear} ${f} Hz`).toBe(AUDIOGRAM[ear][f]);
+      for (const f of OCTAVES) expect(got[ear]![f], `${ear} ${f} Hz`).toBe(AUDIOGRAM[ear][f]);
     }
+    // Inter-octave inserted by the server, tested and flagged; not in the other ear.
+    expect(got.right![1500]).toBe(30);
+    expect(res.audiogram.find((t) => t.ear === 'right' && t.frequency_hz === 1500)?.['is_interoctave']).toBe(true);
+    expect(got.left![1500]).toBeUndefined();
+    // QC probes ran after every search and all passed (QUALIND #7).
+    expect(out.trials.some((t) => t.phase === 'qc_probe')).toBe(true);
+    expect(res.quality_metrics['qc_probe_fail_rate']).toBe(0);
     // Server QC agrees with the client's own trial log.
     const q = res.quality_metrics;
     expect(q.catch_trials).toBeGreaterThan(0);

@@ -37,7 +37,13 @@ const CLIENT_ABORT_REASONS: Record<AbortReason, true> = {
   procedure_error: true,
   stimulus_error: true,
 };
-const CLIENT_PHASES: Record<TrialPhase, true> = { familiarisation: true, descent: true, ascent: true, catch: true };
+const CLIENT_PHASES: Record<TrialPhase, true> = {
+  familiarisation: true,
+  descent: true,
+  ascent: true,
+  qc_probe: true,
+  catch: true,
+};
 const CLIENT_ROLES: Record<TestRole, true> = { initial: true, retest: true, verification: true };
 
 
@@ -64,8 +70,8 @@ describe('API contract (openapi.json)', () => {
     for (const r of Object.keys(CLIENT_ABORT_REASONS)) expect(server, r).toContain(r);
   });
 
-  it('client phases and roles are exactly the server enums (minus unsupported qc_probe)', () => {
-    expect(new Set(schema('Phase').enum)).toEqual(new Set([...Object.keys(CLIENT_PHASES), 'qc_probe']));
+  it('client phases and roles are exactly the server enums', () => {
+    expect(new Set(schema('Phase').enum)).toEqual(new Set(Object.keys(CLIENT_PHASES)));
     expect(new Set(schema('SearchRole').enum)).toEqual(new Set(Object.keys(CLIENT_ROLES)));
   });
 
@@ -94,7 +100,7 @@ describe('API contract (openapi.json)', () => {
     expect(props('SessionCreate')).toEqual(
       [
         'better_ear', 'calibration', 'client_time_origin_ms', 'consent_version', 'device', 'environment',
-        'mode', 'participant_id', 'profile_cap_db_hl', 'supervision',
+        'frequency_caps_db_hl', 'mode', 'participant_id', 'profile_cap_db_hl', 'supervision',
       ].sort(),
     );
   });
