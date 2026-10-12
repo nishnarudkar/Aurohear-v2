@@ -9,7 +9,9 @@ are clamped and the clamp is reported to the caller so it can be logged as a QC
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 FLOOR_DB_HL: int = -10
 """ASHA audiogram minimum [R1]."""
@@ -75,3 +77,36 @@ class LevelLattice:
         if level > self.ceiling:
             return self.ceiling, True
         return level, False
+
+
+def floor_to_grid(level_db_hl: float) -> int:
+    """Largest 5 dB grid level ≤ `level_db_hl` (a cap is never rounded *up*)."""
+    return math.floor(level_db_hl / STEP_DB) * STEP_DB
+
+
+@dataclass(frozen=True, slots=True)
+class FrequencyLattices:
+    """Per-frequency output ceilings (spec §3.4: min(profile_max_f, 90 dB HL)).
+
+    `caps_db_hl` holds the transducer profile's maximum deliverable level per frequency,
+    which need not lie on the grid (e.g. 84 dB HL at 8 kHz). It is floored to the 5 dB
+    grid so the engine never requests a level the hardware cannot produce. Frequencies
+    without an entry use `default`.
+    """
+
+    default: LevelLattice = field(default_factory=LevelLattice)
+    caps_db_hl: Mapping[int, float] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for f, cap in self.caps_db_hl.items():
+            if not math.isfinite(cap) or floor_to_grid(cap) <= self.default.floor:
+                raise ValueError(f"cap {cap} dB HL at {f} Hz leaves no testable range above the floor")
+
+    def for_frequency(self, frequency_hz: int) -> LevelLattice:
+        cap = self.caps_db_hl.get(frequency_hz)
+        if cap is None:
+            return self.default
+        ceiling = min(self.default.ceiling, floor_to_grid(cap))
+        if ceiling == self.default.ceiling:
+            return self.default
+        return LevelLattice(floor=self.default.floor, ceiling=ceiling)

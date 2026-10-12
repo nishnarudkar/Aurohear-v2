@@ -17,17 +17,32 @@ accepted. If it is > 5 dB (or one of the two is not a measured threshold) the ea
 flagged ``unstable_1k`` and two verification searches are inserted immediately —
 1 kHz a third time, and 2 kHz as the "one other frequency" ASHA requires.
 
-Not yet implemented (later phases): inter-octave insertion (750/1500 Hz), 125 Hz,
-catch trials and QC probes (runner, Phase 3), mandatory inter-ear break (UI).
+Inter-octave rule (spec §6.4): after an ear's octave sequence (and any verification
+searches), 750 Hz is added if |T(500) − T(1000)| ≥ 20 dB and 1500 Hz if
+|T(1000) − T(2000)| ≥ 20 dB, using the *accepted* thresholds (a no-response counts at
+its ceiling; an unresolved result cannot trigger). 3000 and 6000 Hz — the spec's other
+two inter-octaves — are always tested in the ASHA order, so they are never conditional.
+Inter-octaves are tested before the ear switch.
+
+QC probes (spec §6.3): every measured threshold is followed by re-presentations at the
+threshold and at threshold + 5 dB (see qc_probe.py). On by default; `qc_probes=False`
+disables them.
+
+Output ceilings (spec §3.4) are per frequency: `frequency_caps_db_hl` (from the
+transducer profile) is floored to the 5 dB grid and capped at 90 dB HL, and every
+familiarisation, start level, staircase step, no-response and probe respects it.
+
+Not implemented: 125 Hz, catch trials (client runner), mandatory inter-ear break (UI).
 """
 
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from .familiarisation import Familiarisation, FamiliarisationConfig
-from .levels import LevelLattice
+from .levels import FrequencyLattices, LevelLattice
 from .models import (
     Ear,
     EarResult,
@@ -38,6 +53,7 @@ from .models import (
     ThresholdResult,
     ThresholdStatus,
 )
+from .qc_probe import QcProbe
 from .staircase import HughsonWestlakeStaircase, StaircaseConfig
 
 PROTOCOL_VERSION = "aurohear-asha2005-ac-0.1.0"
@@ -62,6 +78,25 @@ FIRST_EAR_SEQUENCE: tuple[tuple[int, SearchRole], ...] = (
 SECOND_EAR_SEQUENCE: tuple[tuple[int, SearchRole], ...] = tuple(
     step for step in FIRST_EAR_SEQUENCE if step[1] is not SearchRole.RETEST
 )
+
+INTER_OCTAVE_DIFFERENCE_DB = 20
+INTER_OCTAVE_RULES: tuple[tuple[int, int, int], ...] = (
+    # (inter-octave, lower octave, upper octave) — the conditional ones (spec §6.4)
+    (750, 500, 1000),
+    (1500, 1000, 2000),
+)
+
+
+def inter_octaves_needed(audiogram: Mapping[int, ThresholdResult]) -> list[int]:
+    """Inter-octave frequencies triggered by the accepted thresholds of one ear."""
+    out: list[int] = []
+    for f, lo, hi in INTER_OCTAVE_RULES:
+        a, b = audiogram.get(lo), audiogram.get(hi)
+        if a is None or b is None or a.threshold_db_hl is None or b.threshold_db_hl is None:
+            continue  # unresolved / untested: the rule cannot fire
+        if abs(a.threshold_db_hl - b.threshold_db_hl) >= INTER_OCTAVE_DIFFERENCE_DB and f not in audiogram:
+            out.append(f)
+    return out
 
 
 def accept_threshold(results: list[ThresholdResult]) -> ThresholdResult:
@@ -105,6 +140,8 @@ class _EarState:
     thresholds: list[ThresholdResult] = field(default_factory=list)
     retest_delta_db: int | None = None
     unstable_1k: bool = False
+    inter_octaves_evaluated: bool = False
+    inter_octave_frequencies: set[int] = field(default_factory=set)
 
     def last_measured_threshold(self) -> int | None:
         for r in reversed(self.thresholds):
@@ -139,10 +176,17 @@ class AudiometryProtocol:
         *,
         better_ear: Ear | None = None,
         lattice: LevelLattice | None = None,
+        frequency_caps_db_hl: Mapping[int, float] | None = None,
         staircase_config: StaircaseConfig | None = None,
         familiarisation_config: FamiliarisationConfig | None = None,
+        qc_probes: bool = True,
+        inter_octaves: bool = True,
     ) -> None:
         self.lattice = lattice or LevelLattice()
+        self.lattices = FrequencyLattices(default=self.lattice, caps_db_hl=dict(frequency_caps_db_hl or {}))
+        self.qc_probes = qc_probes
+        self.inter_octaves = inter_octaves
+        self._pending: ThresholdResult | None = None
         self.staircase_config = staircase_config or StaircaseConfig()
         self.familiarisation_config = familiarisation_config or FamiliarisationConfig()
         first = better_ear or Ear.RIGHT
@@ -152,7 +196,7 @@ class AudiometryProtocol:
             _EarState(first.opposite, deque(SECOND_EAR_SEQUENCE)),
         ]
         self._ear_index = 0
-        self._unit: Familiarisation | HughsonWestlakeStaircase | None = self._new_familiarisation()
+        self._unit: Familiarisation | HughsonWestlakeStaircase | QcProbe | None = self._new_familiarisation()
 
     # ------------------------------------------------------------------ public API
 
@@ -201,7 +245,7 @@ class AudiometryProtocol:
         return Familiarisation(
             self._ear.ear,
             FAMILIARISATION_FREQUENCY_HZ,
-            lattice=self.lattice,
+            lattice=self.lattices.for_frequency(FAMILIARISATION_FREQUENCY_HZ),
             config=self.familiarisation_config,
         )
 
@@ -211,9 +255,23 @@ class AudiometryProtocol:
             ear.familiarisation = unit.result()
         elif isinstance(unit, HughsonWestlakeStaircase):
             res = unit.result()
-            ear.thresholds.append(res)
-            if res.test_role is SearchRole.RETEST:
-                self._evaluate_retest(ear, res)
+            if res.frequency_hz in ear.inter_octave_frequencies:
+                res = res.model_copy(update={"is_interoctave": True})
+            if self.qc_probes and res.status is ThresholdStatus.MEASURED:
+                self._pending = res
+                self._unit = QcProbe(res, self.lattices.for_frequency(res.frequency_hz))
+                return
+            self._commit(ear, res)
+        elif isinstance(unit, QcProbe):
+            assert self._pending is not None
+            self._pending = None
+            self._commit(ear, unit.apply())
+
+        if not ear.plan and self.inter_octaves and not ear.inter_octaves_evaluated:
+            ear.inter_octaves_evaluated = True
+            added = inter_octaves_needed(ear.to_result().audiogram)
+            ear.inter_octave_frequencies.update(added)
+            ear.plan.extend((f, SearchRole.INITIAL) for f in added)
 
         if ear.plan:
             self._unit = self._next_staircase(ear)
@@ -223,25 +281,29 @@ class AudiometryProtocol:
         else:
             self._unit = None
 
+    def _commit(self, ear: _EarState, res: ThresholdResult) -> None:
+        ear.thresholds.append(res)
+        if res.test_role is SearchRole.RETEST:
+            self._evaluate_retest(ear, res)
+
     def _next_staircase(self, ear: _EarState) -> HughsonWestlakeStaircase:
         frequency, role = ear.plan.popleft()
+        lattice = self.lattices.for_frequency(frequency)
         return HughsonWestlakeStaircase(
             ear.ear,
             frequency,
-            self._start_level(ear),
-            lattice=self.lattice,
+            self._start_level(ear, lattice),
+            lattice=lattice,
             config=self.staircase_config,
             role=role,
         )
 
-    def _start_level(self, ear: _EarState) -> int:
+    def _start_level(self, ear: _EarState, lattice: LevelLattice) -> int:
+        """Spec §6.3 step 1, clamped to *this frequency's* ceiling."""
         assert ear.familiarisation is not None
-        if not ear.thresholds:
-            return ear.familiarisation.level_db_hl
-        previous = ear.last_measured_threshold()
-        if previous is None:
-            return ear.familiarisation.level_db_hl
-        return self.lattice.clamp(previous + SUBSEQUENT_START_OFFSET_DB)[0]
+        previous = ear.last_measured_threshold() if ear.thresholds else None
+        base = ear.familiarisation.level_db_hl if previous is None else previous + SUBSEQUENT_START_OFFSET_DB
+        return lattice.clamp(base)[0]
 
     def _evaluate_retest(self, ear: _EarState, retest: ThresholdResult) -> None:
         initial = next(

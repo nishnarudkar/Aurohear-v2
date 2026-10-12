@@ -19,7 +19,7 @@ from aurohear.audiometry import (
 )
 from aurohear.audiometry.simulation import DeterministicListener, RetestShiftListener, drive
 
-FREQS = (250, 500, 1000, 2000, 3000, 4000, 6000, 8000)
+FREQS = (250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000)
 
 
 def flat(level: float) -> dict[Ear, dict[int, float]]:
@@ -199,3 +199,257 @@ def test_ear_results_so_far_reports_partial_progress() -> None:
     # When complete, the partial view equals the final result.
     drive(proto, listener)
     assert proto.ear_results_so_far() == proto.result().ears
+
+
+# ====================================================================== Prompt 2
+# Inter-octaves (spec §6.4), QC probes (§6.3), per-frequency ceilings (§3.4).
+
+from hypothesis import given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
+
+from aurohear.audiometry import FrequencyLattices, Phase, QcProbe, inter_octaves_needed  # noqa: E402
+from aurohear.audiometry.levels import floor_to_grid  # noqa: E402
+from strategies import grid_audiograms  # noqa: E402
+
+
+def with_levels(base: float, **overrides: float) -> dict[Ear, dict[int, float]]:
+    """flat(base) with per-frequency overrides like right_500=30 or both_1000=10."""
+    aud = flat(base)
+    for key, v in overrides.items():
+        ear, f = key.split("_")
+        for e in (Ear.RIGHT, Ear.LEFT) if ear == "both" else (Ear(ear),):
+            aud[e][int(f)] = v
+    return aud
+
+
+def searched(ear_res, phase_filter=None) -> list[int]:  # type: ignore[no-untyped-def]
+    return [r.frequency_hz for r in ear_res.thresholds]
+
+
+# ---------------------------------------------------------------- inter-octaves
+
+
+@pytest.mark.parametrize(
+    ("t500", "t1000", "t2000", "expected"),
+    [
+        (10, 10, 10, []),
+        (25, 10, 10, []),  # 15 dB: below the rule
+        (30, 10, 10, [750]),  # exactly 20 dB fires
+        (10, 30, 10, [750, 1500]),
+        (10, 10, 30, [1500]),
+        (60, 10, 60, [750, 1500]),
+    ],
+)
+def test_inter_octave_rule_triggers(t500: int, t1000: int, t2000: int, expected: list[int]) -> None:
+    proto = AudiometryProtocol()
+    drive(proto, DeterministicListener(with_levels(10, both_500=t500, both_1000=t1000, both_2000=t2000)))
+    for ear_res in proto.result().ears:
+        freqs = searched(ear_res)
+        inserted = [f for f in freqs if f in (750, 1500)]
+        assert inserted == expected
+        assert all(ear_res.audiogram[f].is_interoctave for f in inserted)
+        assert not any(r.is_interoctave for r in ear_res.thresholds if r.frequency_hz not in (750, 1500))
+        # Inter-octaves come after every octave of that ear (after 250 Hz).
+        if inserted:
+            assert freqs.index(inserted[0]) > freqs.index(250)
+
+
+def test_inter_octaves_are_per_ear_and_before_the_ear_switch() -> None:
+    aud = with_levels(10, right_500=40)  # only the right ear triggers 750
+    proto = AudiometryProtocol()
+    log = drive(proto, DeterministicListener(aud))
+    right, left = proto.result().ears
+    assert 750 in right.audiogram and 750 not in left.audiogram
+    ears = [p.ear for p, _ in log]
+    last_right = max(i for i, e in enumerate(ears) if e is Ear.RIGHT)
+    last_750 = max(i for i, (p, _) in enumerate(log) if p.frequency_hz == 750)
+    assert last_750 <= last_right  # tested before switching ears
+    assert aud[Ear.RIGHT][750] == right.audiogram[750].threshold_db_hl
+
+
+def test_inter_octave_uses_the_accepted_1k_value_not_the_retest() -> None:
+    # Initial 1 kHz = 10, retest reads 30 (unstable → verification also 30); accepted = 10.
+    aud = with_levels(10, both_500=30)
+    proto = AudiometryProtocol()
+    drive(proto, RetestShiftListener(DeterministicListener(aud), shift_db=20))
+    right = proto.result().ears[0]
+    assert right.audiogram[1000].threshold_db_hl == 10
+    assert 750 in right.audiogram  # |30 − 10| = 20 fires; |30 − 30| would not
+
+
+def test_no_response_counts_at_the_ceiling_for_the_rule() -> None:
+    aud = with_levels(10, both_500=200, both_1000=60, both_2000=60)
+    proto = AudiometryProtocol()
+    drive(proto, DeterministicListener(aud))
+    right = proto.result().ears[0]
+    assert right.audiogram[500].status is ThresholdStatus.NO_RESPONSE
+    assert 750 in right.audiogram  # 90 (NR at cap) vs 60
+
+
+def test_unresolved_threshold_cannot_trigger_an_inter_octave() -> None:
+    proto = AudiometryProtocol()
+    drive(proto, DeterministicListener(with_levels(10, both_500=40)))
+    aud = dict(proto.result().ears[0].audiogram)
+    assert inter_octaves_needed({f: r for f, r in aud.items() if f != 750}) == [750]
+    unresolved = aud[500].model_copy(update={"status": ThresholdStatus.UNRESOLVED, "threshold_db_hl": None})
+    assert inter_octaves_needed({**aud, 500: unresolved}) == []
+    assert inter_octaves_needed({}) == []
+
+
+def test_inter_octaves_can_be_disabled() -> None:
+    proto = AudiometryProtocol(inter_octaves=False)
+    drive(proto, DeterministicListener(with_levels(10, both_500=60)))
+    assert all(750 not in e.audiogram for e in proto.result().ears)
+
+
+# ---------------------------------------------------------------- QC probes
+
+
+def test_every_measured_search_is_followed_by_probes_at_t_and_t_plus_5() -> None:
+    proto = AudiometryProtocol()
+    log = drive(proto, DeterministicListener(flat(25)))
+    probes = [(p.ear, p.frequency_hz, p.test_role, p.level_db_hl) for p, _ in log if p.phase is Phase.QC_PROBE]
+    results = [r for e in proto.result().ears for r in e.thresholds]
+    assert len(probes) == 2 * len(results)
+    for i, r in enumerate(results):
+        assert probes[2 * i] == (r.ear, r.frequency_hz, r.test_role, 25)
+        assert probes[2 * i + 1] == (r.ear, r.frequency_hz, r.test_role, 30)
+        assert r.qc_probe_at_threshold_heard is True and r.qc_probe_plus5_heard is True
+        assert r.qc_probe_pass is True
+    # Each probe pair immediately follows its search and precedes the next one.
+    phases = [p.phase for p, _ in log]
+    for i in range(1, len(phases)):
+        if phases[i] is Phase.QC_PROBE and phases[i - 1] is not Phase.QC_PROBE:
+            assert phases[i + 1] is Phase.QC_PROBE
+
+
+def test_missed_plus5_probe_is_a_qc_failure_and_never_changes_the_threshold() -> None:
+    base = DeterministicListener(flat(25))
+
+    def unreliable(p):  # type: ignore[no-untyped-def]
+        if p.phase is Phase.QC_PROBE and p.level_db_hl == 30:
+            return False  # misses the +5 dB probe
+        return base(p)
+
+    proto = AudiometryProtocol()
+    drive(proto, unreliable)
+    for e in proto.result().ears:
+        for r in e.thresholds:
+            assert r.threshold_db_hl == 25
+            assert r.qc_probe_plus5_heard is False and r.qc_probe_pass is False
+            assert r.qc_probe_at_threshold_heard is True
+
+
+def test_no_probe_after_no_response_and_single_probe_at_the_cap() -> None:
+    proto = AudiometryProtocol()
+    drive(proto, DeterministicListener(with_levels(20, both_8000=200, both_6000=90)))
+    right = proto.result().ears[0]
+    nr = right.audiogram[8000]
+    assert nr.status is ThresholdStatus.NO_RESPONSE
+    assert nr.qc_probe_at_threshold_heard is None and nr.qc_probe_pass is None
+    at_cap = right.audiogram[6000]
+    assert at_cap.threshold_db_hl == 90
+    assert at_cap.qc_probe_at_threshold_heard is True
+    assert at_cap.qc_probe_plus5_heard is None  # 95 dB HL is above the cap: not presented
+
+
+def test_probes_off_gives_identical_thresholds() -> None:
+    aud = AUDIOGRAMS_FOR_PROBE_EQUIVALENCE = with_levels(15, both_500=40, both_4000=55)  # noqa: N806
+    on, off = AudiometryProtocol(), AudiometryProtocol(qc_probes=False)
+    drive(on, DeterministicListener(aud))
+    log_off = drive(off, DeterministicListener(aud))
+    assert not any(p.phase is Phase.QC_PROBE for p, _ in log_off)
+    for a, b in zip(on.result().ears, off.result().ears, strict=True):
+        assert {f: r.threshold_db_hl for f, r in a.audiogram.items()} == {f: r.threshold_db_hl for f, r in b.audiogram.items()}
+    del AUDIOGRAMS_FOR_PROBE_EQUIVALENCE
+
+
+def test_qc_probe_unit_contract() -> None:
+    proto = AudiometryProtocol(qc_probes=False)
+    drive(proto, DeterministicListener(flat(30)))
+    measured = proto.result().ears[0].audiogram[1000]
+    probe = QcProbe(measured, LevelLattice())
+    p1 = probe.next_presentation()
+    assert p1 is not None and p1.phase is Phase.QC_PROBE and p1.level_db_hl == 30
+    probe.record_response(True)
+    probe.record_response(False)
+    assert probe.is_complete and probe.next_presentation() is None
+    assert probe.apply().qc_probe_pass is False
+    with pytest.raises(RuntimeError):
+        probe.record_response(True)
+    nr = measured.model_copy(update={"status": ThresholdStatus.NO_RESPONSE})
+    with pytest.raises(ValueError):
+        QcProbe(nr, LevelLattice())
+
+
+# ---------------------------------------------------------------- per-frequency ceilings
+
+
+def test_floor_to_grid_never_rounds_a_cap_up() -> None:
+    assert [floor_to_grid(x) for x in (84, 84.9, 85, 89.99, 90, -7)] == [80, 80, 85, 85, 90, -10]
+
+
+def test_frequency_lattices() -> None:
+    fl = FrequencyLattices(caps_db_hl={8000: 84, 250: 70.5, 1000: 120})
+    assert fl.for_frequency(8000).ceiling == 80
+    assert fl.for_frequency(250).ceiling == 70
+    assert fl.for_frequency(1000).ceiling == 90  # never above the global 90 dB HL cap
+    assert fl.for_frequency(2000).ceiling == 90
+    with pytest.raises(ValueError):
+        FrequencyLattices(caps_db_hl={4000: -10})
+    with pytest.raises(ValueError):
+        FrequencyLattices(caps_db_hl={4000: float("nan")})
+
+
+def test_per_frequency_cap_is_never_exceeded_and_nr_is_at_that_cap() -> None:
+    caps = {8000: 84, 250: 70}
+    proto = AudiometryProtocol(frequency_caps_db_hl=caps)
+    log = drive(proto, DeterministicListener(with_levels(30, both_8000=85, both_250=60, both_4000=88)))
+    assert max(p.level_db_hl for p, _ in log if p.frequency_hz == 8000) == 80
+    assert max(p.level_db_hl for p, _ in log if p.frequency_hz == 250) <= 70
+    # An uncapped frequency still reaches the global 90 dB HL when the listener needs it.
+    assert max(p.level_db_hl for p, _ in log if p.frequency_hz == 4000) == 90
+    assert proto.result().ears[0].audiogram[4000].threshold_db_hl == 90
+    for e in proto.result().ears:
+        assert e.audiogram[8000].status is ThresholdStatus.NO_RESPONSE
+        assert e.audiogram[8000].threshold_db_hl == 80
+        assert e.audiogram[250].threshold_db_hl == 60  # measurable below its cap
+
+
+def test_familiarisation_respects_the_1k_cap() -> None:
+    proto = AudiometryProtocol(frequency_caps_db_hl={1000: 35})
+    log = drive(proto, DeterministicListener(flat(120)))
+    assert max(p.level_db_hl for p, _ in log if p.frequency_hz == 1000) == 35
+
+
+caps_strategy = st.dictionaries(
+    st.sampled_from([250, 500, 750, 1000, 1500, 2000, 3000, 4000, 6000, 8000]),
+    st.floats(min_value=-4.9, max_value=110, allow_nan=False),
+    max_size=6,
+)
+
+
+@settings(max_examples=60, deadline=None)
+@given(audiogram=grid_audiograms(), caps=caps_strategy)
+def test_property_caps_inter_octaves_and_probes(audiogram, caps) -> None:  # type: ignore[no-untyped-def]
+    proto = AudiometryProtocol(frequency_caps_db_hl=caps)
+    log = drive(proto, DeterministicListener(audiogram), max_steps=5000)
+    lat = proto.lattices
+    # 1. No presentation ever exceeds its frequency's (floored) ceiling.
+    for p, _ in log:
+        assert p.level_db_hl <= lat.for_frequency(p.frequency_hz).ceiling
+    for e in proto.result().ears:
+        octave_audiogram = {f: r for f, r in e.audiogram.items() if f not in (750, 1500)}
+        # 2. Inter-octaves present exactly when the rule fires on the accepted values.
+        assert sorted(f for f in e.audiogram if f in (750, 1500)) == inter_octaves_needed(octave_audiogram)
+        for f, r in e.audiogram.items():
+            ceiling = lat.for_frequency(f).ceiling
+            truth = audiogram[e.ear][f]
+            # 3. Ideal listener: exact below the cap, no-response at the cap above it.
+            if truth > ceiling:
+                assert r.status is ThresholdStatus.NO_RESPONSE and r.threshold_db_hl == ceiling
+            else:
+                assert r.threshold_db_hl == max(truth, -10)
+                # 4. Probes: heard at T; +5 heard unless above the cap.
+                assert r.qc_probe_at_threshold_heard is True
+                assert r.qc_probe_plus5_heard is (True if r.threshold_db_hl + 5 <= ceiling else None)

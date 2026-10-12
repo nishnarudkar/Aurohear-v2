@@ -109,6 +109,20 @@ class ThresholdResult(_Frozen):
     )
     clamp_events: int = Field(ge=0, description="QC indicator 13")
     trials: tuple[StaircaseTrial, ...]
+    is_interoctave: bool = Field(
+        default=False, description="Inserted by the ≥ 20 dB inter-octave rule (spec §6.4)"
+    )
+    qc_probe_at_threshold_heard: bool | None = Field(
+        default=None, description="QC re-presentation at the threshold (spec §6.3); None if not probed"
+    )
+    qc_probe_plus5_heard: bool | None = Field(
+        default=None, description="QC presentation at threshold + 5 dB; None if not probed or above the cap"
+    )
+
+    @property
+    def qc_probe_pass(self) -> bool | None:
+        """Spec §6.3: a non-response at threshold + 5 dB is a quality-check failure."""
+        return self.qc_probe_plus5_heard
 
     @model_validator(mode="after")
     def _status_consistency(self) -> Self:
@@ -124,6 +138,9 @@ class ThresholdResult(_Frozen):
             raise ValueError("unresolved threshold must not carry threshold_db_hl")
         if self.presentations != len(self.trials):
             raise ValueError("presentations must equal len(trials)")
+        probed = self.qc_probe_at_threshold_heard is not None or self.qc_probe_plus5_heard is not None
+        if probed and self.status is not ThresholdStatus.MEASURED:
+            raise ValueError("only a measured threshold can be QC-probed")
         return self
 
 

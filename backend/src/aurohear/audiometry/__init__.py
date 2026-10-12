@@ -6,7 +6,7 @@ responded.
 """
 
 from .familiarisation import Familiarisation, FamiliarisationConfig
-from .levels import FLOOR_DB_HL, MAX_CEILING_DB_HL, LevelLattice
+from .levels import FLOOR_DB_HL, MAX_CEILING_DB_HL, FrequencyLattices, LevelLattice
 from .models import (
     Ear,
     EarResult,
@@ -22,15 +22,19 @@ from .models import (
 )
 from .protocol import (
     FIRST_EAR_SEQUENCE,
+    INTER_OCTAVE_RULES,
     PROTOCOL_VERSION,
     SECOND_EAR_SEQUENCE,
     AudiometryProtocol,
     accept_threshold,
+    inter_octaves_needed,
 )
+from .qc_probe import QcProbe
 from .staircase import HughsonWestlakeStaircase, StaircaseConfig
 
 __all__ = [
     "FIRST_EAR_SEQUENCE",
+    "INTER_OCTAVE_RULES",
     "FLOOR_DB_HL",
     "MAX_CEILING_DB_HL",
     "PROTOCOL_VERSION",
@@ -39,6 +43,7 @@ __all__ = [
     "Ear",
     "EarResult",
     "Familiarisation",
+    "FrequencyLattices",
     "FamiliarisationConfig",
     "FamiliarisationResult",
     "FamiliarisationStatus",
@@ -46,6 +51,7 @@ __all__ = [
     "LevelLattice",
     "Phase",
     "Presentation",
+    "QcProbe",
     "ProtocolResult",
     "SearchRole",
     "StaircaseConfig",
@@ -53,4 +59,5 @@ __all__ = [
     "ThresholdResult",
     "ThresholdStatus",
     "accept_threshold",
+    "inter_octaves_needed",
 ]

@@ -21,11 +21,14 @@ from aurohear.audiometry.simulation import (
     RetestShiftListener,
     drive,
 )
-from strategies import TEST_FREQUENCIES, grid_audiograms, lattices
+from aurohear.audiometry import inter_octaves_needed
+from strategies import OCTAVE_FREQUENCIES, TEST_FREQUENCIES, grid_audiograms, lattices
 
 # Upper bound on presentations for a whole session: 2 familiarisations + 9 + 8 searches
-# + 2 possible verification searches, each at its own hard limit.
-SESSION_BOUND = 2 * FamiliarisationConfig().max_presentations + (9 + 8 + 2) * StaircaseConfig().max_presentations
+# + 2 possible verification searches + up to 2 inter-octaves per ear, each at its hard
+# limit, plus 2 QC probes per search.
+_SEARCHES = 9 + 8 + 2 + 2 * 2
+SESSION_BOUND = 2 * FamiliarisationConfig().max_presentations + _SEARCHES * (StaircaseConfig().max_presentations + 2)
 
 
 @given(audiogram=grid_audiograms(), lattice=lattices(), better=st.sampled_from([None, *Ear]))
@@ -39,7 +42,8 @@ def test_ideal_listener_full_session_is_exact(
     assert res.ear_order[0] is (better or Ear.RIGHT)
     assert set(res.ear_order) == set(Ear)
     for ear_res in res.ears:
-        assert set(ear_res.audiogram) == set(TEST_FREQUENCIES)
+        # Every octave is tested; an inter-octave exactly when the rule fires.
+        assert set(OCTAVE_FREQUENCIES) <= set(ear_res.audiogram) <= set(TEST_FREQUENCIES)
         for f, r in ear_res.audiogram.items():
             truth = audiogram[ear_res.ear][f]
             if truth > lattice.ceiling:
@@ -71,7 +75,13 @@ def test_first_ear_frequency_order_is_asha(audiogram: dict[Ear, dict[int, float]
     drive(proto, DeterministicListener(audiogram), max_steps=SESSION_BOUND + 1)
     first = proto.result().ears[0]
     order = [(r.frequency_hz, r.test_role) for r in first.thresholds]
-    assert order == list(FIRST_EAR_SEQUENCE)
+    base = [step for step in order if step[0] not in (750, 1500)]
+    assert base == list(FIRST_EAR_SEQUENCE)
+    # Inter-octaves come last in the ear, in rule order, exactly when triggered.
+    tail = order[len(base):]
+    assert tail == [(f, SearchRole.INITIAL) for f in inter_octaves_needed(
+        {f: r for f, r in first.audiogram.items() if f not in (750, 1500)}
+    )]
 
 
 @given(
@@ -115,4 +125,4 @@ def test_noisy_listener_session_always_terminates(
     assert proto.is_complete
     assert len(log) <= SESSION_BOUND
     res = proto.result()
-    assert all(set(e.audiogram) == set(TEST_FREQUENCIES) for e in res.ears)
+    assert all(set(OCTAVE_FREQUENCIES) <= set(e.audiogram) <= set(TEST_FREQUENCIES) for e in res.ears)

@@ -8,7 +8,9 @@ from aurohear.audiometry import Ear, LevelLattice
 from aurohear.audiometry.protocol import FIRST_EAR_SEQUENCE
 
 DEFAULT_LATTICE = LevelLattice()
-TEST_FREQUENCIES: tuple[int, ...] = tuple(sorted({f for f, _ in FIRST_EAR_SEQUENCE}))
+OCTAVE_FREQUENCIES: tuple[int, ...] = tuple(sorted({f for f, _ in FIRST_EAR_SEQUENCE}))
+# Synthetic listeners need a true threshold at the conditional inter-octaves too.
+TEST_FREQUENCIES: tuple[int, ...] = tuple(sorted({*OCTAVE_FREQUENCIES, 750, 1500}))
 
 
 def lattice_levels(lattice: LevelLattice = DEFAULT_LATTICE) -> st.SearchStrategy[int]:
