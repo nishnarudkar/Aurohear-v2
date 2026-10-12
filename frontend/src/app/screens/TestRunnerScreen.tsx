@@ -22,7 +22,7 @@ import { ConfirmDialog, useCountdown } from '../components/common';
 import { ResponseButton } from '../components/ResponseButton';
 import { progressFromTrials } from '../progress';
 
-type View = 'preparing' | 'ear-intro' | 'break' | 'reinstruct' | 'running' | 'finished';
+type View = 'preparing' | 'ear-intro' | 'break' | 'reinstruct' | 'noisy' | 'backgrounded' | 'running' | 'finished';
 
 const TRIAL_STATES = new Set(['InterStimulusInterval', 'TonePresenting', 'CatchTrial', 'ResponseWindow', 'Evaluation', 'Retest1000']);
 
@@ -31,6 +31,8 @@ export function viewFor(stateValue: unknown, earsStarted: number): View {
   if (top === 'Idle' || top === 'Instruction') return 'preparing';
   if (top === 'Familiarization') return earsStarted > 1 ? 'break' : 'ear-intro';
   if (top === 'Reinstruct') return 'reinstruct';
+  if (top === 'NoisyWait') return 'noisy';
+  if (top === 'Backgrounded') return 'backgrounded';
   if (top === 'Complete' || top === 'Aborted') return 'finished';
   if (TRIAL_STATES.has(top)) return 'running';
   return 'running';
@@ -101,6 +103,20 @@ export function TestRunnerScreen({
   else if (view === 'ear-intro') body = <EarIntro ear={earName} onContinue={() => actor.send({ type: 'CONTINUE' })} />;
   else if (view === 'break') body = <BreakScreen untilMs={breakUntil} ear={earName} onContinue={() => actor.send({ type: 'CONTINUE' })} />;
   else if (view === 'reinstruct') body = <ReinstructScreen reason={reason} onContinue={() => actor.send({ type: 'CONTINUE' })} />;
+  else if (view === 'noisy')
+    body = (
+      <div className="notice" role="status">
+        <h1 style={{ marginTop: 0 }}>Too noisy — waiting</h1>
+        <p>We picked up noise in the room, so the last tone did not count. The test will carry on by itself once it has been quiet for a moment.</p>
+      </div>
+    );
+  else if (view === 'backgrounded')
+    body = (
+      <div className="notice" role="status">
+        <h1 style={{ marginTop: 0 }}>Test paused</h1>
+        <p>This window was in the background, so the last tone did not count. The test continues when this window is in front again.</p>
+      </div>
+    );
   else if (view === 'finished') body = <p aria-live="polite">Saving your results…</p>;
   else
     body = (

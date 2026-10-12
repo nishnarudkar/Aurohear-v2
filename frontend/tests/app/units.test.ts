@@ -115,7 +115,7 @@ describe('intake and app flow (spec §7.2)', () => {
     expect(a.getSnapshot().value).toBe('halted');
   });
 
-  it('the setup sequence is fixed: intake → device → calibration → instructions → testing', () => {
+  it('the setup sequence is fixed: intake → device → calibration → environment → instructions → testing', () => {
     const a = createActor(appFlowMachine).start();
     a.send({ type: 'BEGIN_TEST' }); // cannot skip ahead
     expect(a.getSnapshot().value).toBe('welcome');
@@ -126,6 +126,13 @@ describe('intake and app flow (spec §7.2)', () => {
     expect(a.getSnapshot().value).toBe('device');
     a.send({ type: 'DEVICE_CONFIRMED', device: { transducerType: 'circumaural', outputLabel: null, wiredAttested: true, channelCheckPassed: true } });
     a.send({ type: 'CALIBRATED', calibration: {} as never });
+    expect(a.getSnapshot().value).toBe('environment');
+    a.send({ type: 'BEGIN_TEST' }); // no test without the noise check (spec §5.2)
+    expect(a.getSnapshot().value).toBe('environment');
+    a.send({ type: 'ENVIRONMENT_PASSED', environment: { pass: false } as never }); // a failed check cannot advance
+    expect(a.getSnapshot().value).toBe('environment');
+    a.send({ type: 'ENVIRONMENT_PASSED', environment: { pass: true } as never });
+    expect(a.getSnapshot().value).toBe('instructions');
     a.send({ type: 'BEGIN_TEST' });
     expect(a.getSnapshot().value).toBe('testing');
   });

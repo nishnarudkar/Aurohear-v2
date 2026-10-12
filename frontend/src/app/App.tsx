@@ -5,13 +5,23 @@ import { useCallback, useRef } from 'react';
 
 import { settleSession } from '../api/ApiSessionClient';
 import type { ApiBackedTestSession } from '../api/createApiBackedTestSession';
+import { NoiseMonitor } from '../audio/NoiseGate';
 import type { ToneStimulusEngine } from '../audio/ToneStimulusEngine';
 import type { SessionResult } from '../session/testSessionMachine';
 import { appFlowMachine } from './appFlowMachine';
 import { useTheme } from './components/common';
-import { createSetupAudio, createTestEngine, createTestRun, sessionCreateBody, type SetupAudio, testProfile } from './runtime';
+import {
+  createSetupAudio,
+  createTestEngine,
+  createTestRun,
+  sessionCreateBody,
+  type SetupAudio,
+  startEnvironmentGuards,
+  testProfile,
+} from './runtime';
 import { CalibrationScreen } from './screens/CalibrationScreen';
 import { DeviceScreen } from './screens/DeviceScreen';
+import { EnvironmentScreen } from './screens/EnvironmentScreen';
 import { InstructionScreen } from './screens/InstructionScreen';
 import { HaltScreen, IntakeScreen } from './screens/IntakeScreen';
 import { ResultsScreen } from './screens/ResultsScreen';
@@ -24,6 +34,8 @@ export function App() {
   const audio = useRef<SetupAudio | null>(null);
   const testEngine = useRef<ToneStimulusEngine | null>(null);
   const run = useRef<ApiBackedTestSession | null>(null);
+  const monitor = useRef<NoiseMonitor | null>(null);
+  const stopGuards = useRef<(() => void) | null>(null);
   const ctx = state.context;
 
   const ensureTestEngine = (): ToneStimulusEngine => {
@@ -67,14 +79,33 @@ export function App() {
     screen = <DeviceScreen engine={audio.current!.engine} onConfirmed={(device) => send({ type: 'DEVICE_CONFIRMED', device })} />;
   } else if (state.matches('calibration')) {
     screen = <CalibrationScreen engine={audio.current!.engine} onCalibrated={(calibration) => send({ type: 'CALIBRATED', calibration })} />;
+  } else if (state.matches('environment')) {
+    screen = (
+      <EnvironmentScreen
+        openMonitor={() => NoiseMonitor.open(audio.current!.context)}
+        onPassed={(environment, m) => {
+          monitor.current = m;
+          send({ type: 'ENVIRONMENT_PASSED', environment });
+        }}
+      />
+    );
   } else if (state.matches('instructions')) {
     screen = (
       <InstructionScreen
         engine={ensureTestEngine()}
         onBegin={() => {
           const engine = ensureTestEngine();
-          const body = sessionCreateBody(ctx.intake!, ctx.device!, ctx.calibration!, testProfile(ctx.calibration!), audio.current!.context.sampleRate);
+          const body = sessionCreateBody(
+            ctx.intake!,
+            ctx.device!,
+            ctx.calibration!,
+            testProfile(ctx.calibration!),
+            audio.current!.context.sampleRate,
+            ctx.environment!,
+            monitor.current!.status.processingOff,
+          );
           run.current = createTestRun(engine, body);
+          stopGuards.current = startEnvironmentGuards(run.current, monitor.current!, ctx.environment!);
           send({ type: 'BEGIN_TEST' });
         }}
       />
@@ -84,6 +115,8 @@ export function App() {
       <TestRunnerScreen
         run={run.current!}
         onFinished={(output) => {
+          stopGuards.current?.();
+          monitor.current?.close(); // the microphone is released as soon as testing ends
           send({ type: 'TEST_FINISHED', output });
           settle(output, false);
         }}

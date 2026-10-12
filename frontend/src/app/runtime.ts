@@ -13,8 +13,11 @@ import { type EngineFault, ToneStimulusEngine } from '../audio/ToneStimulusEngin
 import { SUPPORTED_FREQUENCIES_HZ } from '../audio/types';
 import { biologicalProfile, RAW_DIGITAL_PROFILE, TIER_C_PROFILE_VERSION } from '../calibration/biological';
 import { createWebAudioStimulusPort } from '../session/webAudioStimulusPort';
+import { DeviceWatchdog } from '../audio/DeviceWatchdog';
+import { BROADBAND_GATE_DBA, NoiseGate, type NoiseMonitor, type PretestResult } from '../audio/NoiseGate';
+import { attachNoiseGate, watchdogHandler } from '../session/environmentGuards';
 import type { CalibrationOutcome, DeviceSetup } from './appFlowMachine';
-import { API_BASE_URL, CONSENT_VERSION, INTER_EAR_BREAK_MS } from './config';
+import { API_BASE_URL, CONSENT_VERSION, INTER_EAR_BREAK_MS, NOISE_ABSOLUTE_CONFIG } from './config';
 import type { IntakeAnswers } from './intake';
 import { participantId } from './participant';
 
@@ -44,6 +47,8 @@ export function sessionCreateBody(
   calibration: CalibrationOutcome,
   profile: CalibrationProfile,
   sampleRate: number,
+  environment: PretestResult,
+  microphoneProcessingOff: boolean,
 ): SessionCreateDto {
   const cross250 = calibration.crossChecks.find((c) => c.frequencyHz === 250);
   return {
@@ -72,7 +77,16 @@ export function sessionCreateBody(
       cross_check_250hz_delta_db: cross250 ? cross250.deltaDb : null,
       calibrated_at: calibration.calibratedAt,
     },
-    environment: null,
+    environment: {
+      level_reference: environment.mode === 'absolute' ? 'db_spl' : 'relative',
+      pretest_dba: environment.dba,
+      pretest_third_octave: Object.fromEntries(Object.entries(environment.meanBands).map(([b, v]) => [b, Math.round(v * 10) / 10])),
+      uncertainty_db: environment.uncertaintyDb,
+      pretest_fluctuation_db: Math.round(environment.fluctuationDb * 10) / 10,
+      microphone_processing_off: microphoneProcessingOff,
+      mpanl_table: NOISE_ABSOLUTE_CONFIG?.mpanl.id ?? null,
+      test_floor_db: NOISE_ABSOLUTE_CONFIG?.testFloorDbHl ?? null,
+    },
   };
 }
 
@@ -92,4 +106,24 @@ export function createTestRun(engine: ToneStimulusEngine, body: SessionCreateDto
     deps: { stimulus: createWebAudioStimulusPort(engine), now: () => performance.now(), random: Math.random },
     config: { interEarBreakMs: INTER_EAR_BREAK_MS },
   });
+}
+
+/**
+ * Start continuous noise monitoring (spec §5.3.2) and the device watchdog (spec §4.1) for
+ * a running test. Returns a function that stops both.
+ */
+export function startEnvironmentGuards(run: ApiBackedTestSession, monitor: NoiseMonitor, environment: PretestResult): () => void {
+  const absolute = environment.mode === 'absolute' && NOISE_ABSOLUTE_CONFIG !== null;
+  const gate = new NoiseGate({
+    limits: environment.limits,
+    broadbandLimitDb: absolute ? BROADBAND_GATE_DBA : null,
+    offsetDb: absolute ? NOISE_ABSOLUTE_CONFIG!.mic.offsetDb : 0,
+  });
+  const detachNoise = attachNoiseGate(run.actor, monitor, gate);
+  const watchdog = new DeviceWatchdog(watchdogHandler(run.actor));
+  void watchdog.start();
+  return () => {
+    detachNoise();
+    watchdog.stop();
+  };
 }
