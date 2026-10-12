@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "node-web-audio-api": "^2.2.0",
     "typescript": "^5.9.3",
