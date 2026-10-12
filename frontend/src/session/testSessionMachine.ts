@@ -76,6 +76,9 @@ export interface SessionContext {
   readonly lastScoredWindowEndMs: number | null;
   readonly falseAlarmsSinceReinstruction: number;
   readonly reinstructions: number;
+  /** Spec §5.3: every ambient-noise interruption is counted. */
+  readonly noiseInterruptions: number;
+  readonly visibilityInterruptions: number;
   readonly reinstructionReason: ReinstructionReason | null;
   readonly earsStarted: number;
   readonly familiarizationEnteredAtMs: number | null;
@@ -91,6 +94,11 @@ export type SessionEvent =
   | { readonly type: 'CONTINUE' }
   | { readonly type: 'RESPONSE'; readonly timestampMs: number; readonly source?: ResponseSource }
   | { readonly type: 'DISCARD_TRIAL'; readonly reason: string }
+  // Environment (spec §5.3 continuous monitoring) and page visibility (spec §4.1).
+  | { readonly type: 'NOISE_EXCEEDED' }
+  | { readonly type: 'NOISE_CLEARED' }
+  | { readonly type: 'PAGE_HIDDEN' }
+  | { readonly type: 'PAGE_VISIBLE' }
   | { readonly type: 'STOP' }
   | { readonly type: 'FAULT'; readonly reason: AbortReason }
   // Internal: the trial scheduled by the ISI entry action.
@@ -242,7 +250,14 @@ export const testSessionMachine = setup({
     discardTrial: assign(({ context, event }) => {
       const tr = context.trial;
       tr?.cancel();
-      const reason = event.type === 'DISCARD_TRIAL' ? event.reason : 'aborted';
+      const reason =
+        event.type === 'DISCARD_TRIAL'
+          ? event.reason
+          : event.type === 'NOISE_EXCEEDED'
+            ? 'ambient_noise'
+            : event.type === 'PAGE_HIDDEN'
+              ? 'visibility_hidden'
+              : 'aborted';
       return {
         trials: tr ? [...context.trials, toTrialRecord(tr, { reason })] : context.trials,
         trial: null,
@@ -260,6 +275,8 @@ export const testSessionMachine = setup({
       endedAtMs: context.deps.now(),
     })),
     markEnded: assign(({ context }) => ({ endedAtMs: context.deps.now() })),
+    countNoise: assign(({ context }) => ({ noiseInterruptions: context.noiseInterruptions + 1 })),
+    countHidden: assign(({ context }) => ({ visibilityInterruptions: context.visibilityInterruptions + 1 })),
   },
 }).createMachine({
   id: 'session',
@@ -278,6 +295,8 @@ export const testSessionMachine = setup({
     lastScoredWindowEndMs: null,
     falseAlarmsSinceReinstruction: 0,
     reinstructions: 0,
+    noiseInterruptions: 0,
+    visibilityInterruptions: 0,
     reinstructionReason: null,
     earsStarted: 0,
     familiarizationEnteredAtMs: null,
@@ -383,6 +402,8 @@ export const testSessionMachine = setup({
         waiting: {
           on: {
             DISCARD_TRIAL: { target: '#session.InterStimulusInterval', reenter: true, actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
+            NOISE_EXCEEDED: { target: '#session.NoisyWait', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countNoise'] },
+            PAGE_HIDDEN: { target: '#session.Backgrounded', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countHidden'] },
           },
           after: {
             untilOnset: [
@@ -399,6 +420,8 @@ export const testSessionMachine = setup({
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
         DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
+        NOISE_EXCEEDED: { target: '#session.NoisyWait', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countNoise'] },
+        PAGE_HIDDEN: { target: '#session.Backgrounded', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countHidden'] },
       },
     },
 
@@ -407,6 +430,8 @@ export const testSessionMachine = setup({
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
         DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
+        NOISE_EXCEEDED: { target: '#session.NoisyWait', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countNoise'] },
+        PAGE_HIDDEN: { target: '#session.Backgrounded', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countHidden'] },
       },
     },
 
@@ -417,6 +442,8 @@ export const testSessionMachine = setup({
       on: {
         RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: true } } },
         DISCARD_TRIAL: { target: 'InterStimulusInterval', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged'] },
+        NOISE_EXCEEDED: { target: '#session.NoisyWait', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countNoise'] },
+        PAGE_HIDDEN: { target: '#session.Backgrounded', actions: ['discardTrial', 'emitTrialLog', 'markTrialsLogged', 'countHidden'] },
       },
     },
 
@@ -482,6 +509,25 @@ export const testSessionMachine = setup({
           },
           { target: 'InterStimulusInterval' },
         ],
+      },
+    },
+
+    /**
+     * Spec §5.3 / §7.2 NOISE_EXCEEDED → DISCARD_TRIAL → NOISY_WAIT: the trial in flight
+     * was discarded; wait until the room is quiet again, then re-present the same tone.
+     */
+    NoisyWait: {
+      on: {
+        RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: false } } },
+        NOISE_CLEARED: 'InterStimulusInterval',
+        PAGE_HIDDEN: { target: 'Backgrounded', actions: 'countHidden' },
+      },
+    },
+    /** Spec §4.1: tab hidden / window blurred mid-trial — discarded; re-present on return. */
+    Backgrounded: {
+      on: {
+        RESPONSE: { actions: { type: 'recordResponse', params: { inTrialLoop: false } } },
+        PAGE_VISIBLE: 'InterStimulusInterval',
       },
     },
 
