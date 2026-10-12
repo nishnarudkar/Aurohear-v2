@@ -112,8 +112,13 @@ describe.skipIf(skipReason !== null)('frontend FSM <-> API <-> engine (real back
     return t.presentation.levelDbHl >= truth ? t.onsetMs + 350 : null;
   };
 
-  function wire(catchTrialRate: number) {
-    const client = new ApiSessionClient({ baseUrl, session: { ...SESSION, participant_id: randomUUID() } });
+  function wire(catchTrialRate: number, net: { down: boolean } = { down: false }) {
+    const client = new ApiSessionClient({
+      baseUrl,
+      session: { ...SESSION, participant_id: randomUUID() },
+      drainBackoff: { baseDelayMs: 2, maxDelayMs: 20 },
+      fetch: (input, init) => (net.down ? Promise.reject(new TypeError('Failed to fetch')) : fetch(input, init)),
+    });
     const h = makeHarness({
       config: { catchTrialRate },
       procedureImpl: client.procedure,
@@ -153,6 +158,30 @@ describe.skipIf(skipReason !== null)('frontend FSM <-> API <-> engine (real back
     expect(q.catch_trials).toBe(out.qc.catchTrials);
     expect(q.catch_false_alarms).toBe(out.qc.catchFalseAlarms);
     expect(q.tone_trials).toBe(out.qc.toneTrials);
+    expect(await serverTrials(client.sessionId)).toHaveLength(out.trials.length);
+  }, 120_000);
+
+  it('network outage mid-test: testing continues on the browser engine; the server agrees afterwards', async () => {
+    const net = { down: false };
+    const { client, h } = wire(0.1, net);
+    const outageListener: Listener = (t) => {
+      if (t.seq === 30) net.down = true; // drop the network and never bring it back during the test
+      return listener(t);
+    };
+    const out = await runSession(h, outageListener);
+    expect(out.status, out.errorMessage ?? '').toBe('complete');
+    expect(client.pendingUploads).toBeGreaterThan(50); // the second half ran entirely offline
+
+    net.down = false;
+    client.retryNow();
+    const res = await settleSession(client, out); // drains in order, then finalizes
+    expect(res.session.status).toBe('complete');
+    const got: Record<string, Record<number, number | null>> = { right: {}, left: {} };
+    for (const t of res.audiogram) got[t.ear]![t.frequency_hz] = t.threshold_db_hl;
+    for (const ear of ['right', 'left'] as const) {
+      for (const f of OCTAVES) expect(got[ear]![f], `${ear} ${f} Hz`).toBe(AUDIOGRAM[ear][f]);
+    }
+    expect(got.right![1500]).toBe(30);
     expect(await serverTrials(client.sessionId)).toHaveLength(out.trials.length);
   }, 120_000);
 

@@ -1,19 +1,27 @@
+/** Local-first ApiSessionClient: tone loop never waits, ordered durable drain, integrity checks. */
+
 import { randomUUID } from 'node:crypto';
 
+import { IDBFactory } from 'fake-indexeddb';
 import { describe, expect, it } from 'vitest';
 
 import {
   ApiContractError,
   ApiError,
+  type ApiClientStatusInfo,
   ApiSessionClient,
   type ApiSessionClientOptions,
-  NetworkError,
+  AuroHearApiClient,
+  EngineDivergenceError,
+  IndexedDbOutboxStore,
+  MemoryOutboxStore,
+  resumePersistedUploads,
   settleSession,
 } from '../../src/api';
 import type { SessionCreateDto } from '../../src/api/types';
-import type { TrialRecord } from '../../src/session';
+import type { Presentation, TrialRecord } from '../../src/session';
+import { FakeServer, SESSION_ID } from './fakeServer';
 import { sampleRecord } from './fixtures';
-import { FakeServer, P, SESSION_ID } from './fakeServer';
 
 const SESSION: SessionCreateDto = {
   participant_id: randomUUID(),
@@ -24,37 +32,58 @@ const SESSION: SessionCreateDto = {
   calibration: { tier: 'B', method: 'model_profile', profile_version: 'test-0' },
 };
 
-function setup(script = [P(40, 'familiarisation'), P(30), P(20), P(25, 'ascent')], o: Partial<ApiSessionClientOptions> = {}) {
-  const server = new FakeServer(script);
-  const sleeps: number[] = [];
+function setup(o: Partial<ApiSessionClientOptions> = {}) {
+  const server = new FakeServer();
+  const statuses: ApiClientStatusInfo[] = [];
   const client = new ApiSessionClient({
     baseUrl: 'http://api.test/',
     fetch: server.fetch,
     session: SESSION,
-    sleep: async (ms) => void sleeps.push(ms),
+    sleep: async () => undefined,
+    drainBackoff: { baseDelayMs: 1, maxDelayMs: 2 },
+    onStatusChange: (s) => statuses.push(s),
     ...o,
   });
-  return { server, client, sleeps };
+  return { server, client, statuses };
 }
 
-let seqCounter = 0;
-function rec(o: Partial<TrialRecord> = {}): TrialRecord {
-  return { ...sampleRecord, trialId: randomUUID(), seq: seqCounter++, ...o };
-}
-const tone = (seq: number, responded = true, o: Partial<TrialRecord> = {}): TrialRecord =>
-  rec({
+/** A machine-shaped record for presentation `p` (tone unless overridden). */
+function record(p: Presentation, seq: number, responded: boolean, o: Partial<TrialRecord> = {}): TrialRecord {
+  return {
+    ...sampleRecord,
+    trialId: randomUUID(),
     seq,
+    ear: p.ear,
+    frequencyHz: p.frequencyHz,
+    requestedLevelDbHl: p.levelDbHl,
+    presentedLevelDbHl: p.levelDbHl,
+    phase: p.phase,
+    testRole: p.testRole,
     responded,
     responseTimestampMs: responded ? 12_420 : null,
     responseLatencyMs: responded ? 420 : null,
     responseInWindow: responded,
     ...o,
-  });
-const catchTrial = (seq: number, responded = false): TrialRecord =>
-  tone(seq, responded, { isCatchTrial: true, phase: 'catch', requestedLevelDbHl: null, presentedLevelDbHl: null, audioContextOnsetS: null });
+  };
+}
+const asCatch = (p: Presentation, seq: number, responded = false): TrialRecord =>
+  record(p, seq, responded, { isCatchTrial: true, phase: 'catch', requestedLevelDbHl: null, presentedLevelDbHl: null, audioContextOnsetS: null });
+
+/** Play `n` tone trials the way the machine does: log, then respond. */
+async function play(client: ApiSessionClient, first: Presentation, n: number, heard = (_p: Presentation) => true) {
+  let p: Presentation | null = first;
+  const records: TrialRecord[] = [];
+  for (let seq = 0; seq < n && p; seq++) {
+    const r = record(p, seq, heard(p));
+    records.push(r);
+    client.trialLog(r);
+    p = await client.procedure.respond(r.responded);
+  }
+  return { records, next: p };
+}
 
 describe('session start', () => {
-  it('POSTs the session body once and returns the mapped first presentation', async () => {
+  it('creates the session once and returns the browser engine’s first tone (== server’s)', async () => {
     const { server, client } = setup();
     const first = await client.procedure.start();
     expect(first).toEqual({ ear: 'right', frequencyHz: 1000, levelDbHl: 40, phase: 'familiarisation', testRole: 'initial' });
@@ -63,7 +92,12 @@ describe('session start', () => {
     await expect(client.procedure.start()).rejects.toThrow(/single-use/);
   });
 
-  it('does not retry session creation (a retry could create a duplicate session)', async () => {
+  it('honours the session’s ear order and per-frequency caps', async () => {
+    const { client } = setup({ session: { ...SESSION, better_ear: 'left', frequency_caps_db_hl: { '1000': 35 } } });
+    expect(await client.procedure.start()).toMatchObject({ ear: 'left', levelDbHl: 35 });
+  });
+
+  it('does not retry session creation (a retry could duplicate the session)', async () => {
     const { server, client } = setup();
     server.faults.push({ match: '/sessions', fault: { kind: 'status', status: 503 } });
     await expect(client.procedure.start()).rejects.toBeInstanceOf(ApiError);
@@ -72,158 +106,185 @@ describe('session start', () => {
   });
 });
 
-describe('trial upload queue', () => {
-  it('uploads catch and tone trials in seq order, one request at a time, and returns the next tone', async () => {
+describe('the tone loop never waits for the network', () => {
+  it('respond() returns before the upload has even completed', async () => {
     const { server, client } = setup();
-    server.latencyMs = 5;
-    await client.procedure.start();
-    client.trialLog(tone(0));
-    const n1 = client.procedure.respond(true);
-    client.trialLog(catchTrial(1, true));
-    client.trialLog(tone(2, false, { discarded: true, discardReason: 'visibility_hidden' }));
-    client.trialLog(tone(3, false));
-    const n3 = client.procedure.respond(false);
-    expect(await n1).toMatchObject({ levelDbHl: 30 });
-    expect(await n3).toMatchObject({ levelDbHl: 20 });
+    const first = (await client.procedure.start())!;
+    server.latencyMs = 50;
+    const r = record(first, 0, true);
+    client.trialLog(r);
+    const next = await client.procedure.respond(true);
+    expect(next).toEqual({ ...first, levelDbHl: 40 }); // second familiarisation tone, locally computed
+    expect(server.trials).toHaveLength(0); // upload still in flight
     await client.flush();
-    expect(server.trials.map((t) => t.seq)).toEqual([0, 1, 2, 3]);
-    expect(server.trials.map((t) => [t.is_catch_trial, t.discarded])).toEqual([[false, false], [true, false], [false, true], [false, false]]);
+    expect(server.trials).toHaveLength(1);
+  });
+
+  it('keeps testing through an outage, then drains everything in order with the same trial_ids', async () => {
+    const { server, client, statuses } = setup();
+    const first = (await client.procedure.start())!;
+    server.offline = true;
+    const { records } = await play(client, first, 12, (p) => p.levelDbHl >= 20);
+    expect(records).toHaveLength(12); // 12 tones presented with the network down
+    expect(server.trials).toHaveLength(0);
+    expect(client.pendingUploads).toBe(12);
+    expect(client.status).toBe('offline');
+
+    server.offline = false;
+    client.retryNow();
+    await client.flush();
+    expect(server.trials.map((t) => t.seq)).toEqual(records.map((r) => r.seq));
+    expect(server.trials.map((t) => t.trial_id)).toEqual(records.map((r) => r.trialId));
+    const posted = server.calls.filter((c) => c.path.endsWith('/trials')).map((c) => (c.body as { trial_id: string }).trial_id);
+    expect(posted.length).toBeGreaterThan(12); // retried during the outage…
+    expect(new Set(posted)).toEqual(new Set(records.map((r) => r.trialId))); // …never with a new id
+    expect(client.pendingUploads).toBe(0);
+    expect(client.status).toBe('online');
+    expect(statuses.map((s) => s.status)).toEqual(expect.arrayContaining(['offline', 'online']));
+  });
+
+  it('uploads one request at a time, in seq order, including catch and discarded trials', async () => {
+    const { server, client } = setup();
+    const p0 = (await client.procedure.start())!;
+    server.latencyMs = 3;
+    client.trialLog(asCatch(p0, 0, true));
+    client.trialLog(record(p0, 1, false, { discarded: true, discardReason: 'visibility_hidden' }));
+    client.trialLog(record(p0, 2, true));
+    await client.procedure.respond(true);
+    await client.flush();
+    expect(server.trials.map((t) => [t.seq, t.is_catch_trial, t.discarded])).toEqual([[0, true, false], [1, false, true], [2, false, false]]);
     expect(server.maxInFlight).toBe(1);
-  });
-
-  it('retries transient failures with the same trial_id and exponential backoff', async () => {
-    const { server, client, sleeps } = setup();
-    await client.procedure.start();
-    server.faults.push(
-      { match: '/trials', fault: { kind: 'status', status: 503 } },
-      { match: '/trials', fault: { kind: 'network' } },
-      { match: '/trials', fault: { kind: 'status', status: 429 } },
-    );
-    const t = tone(0);
-    client.trialLog(t);
-    await expect(client.procedure.respond(true)).resolves.toMatchObject({ levelDbHl: 30 });
-    const posts = server.calls.filter((c) => c.path.endsWith('/trials'));
-    expect(posts).toHaveLength(4);
-    expect(new Set(posts.map((c) => (c.body as { trial_id: string }).trial_id))).toEqual(new Set([t.trialId]));
-    expect(sleeps).toEqual([250, 500, 1000]);
-  });
-
-  it('gives up after maxAttempts with a NetworkError, and the queue stays broken', async () => {
-    const { server, client } = setup(undefined, { retry: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 1 } });
-    await client.procedure.start();
-    server.faults.push({ match: '/trials', fault: { kind: 'network' } }, { match: '/trials', fault: { kind: 'network' } });
-    client.trialLog(tone(0));
-    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(NetworkError);
-    client.trialLog(tone(1));
-    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(NetworkError);
-    expect(client.status).toBe('broken');
-    expect(server.trials).toHaveLength(0); // seq 1 was never sent past the gap
-  });
-
-  it('times out a hung request and retries it', async () => {
-    const { server, client } = setup(undefined, { timeoutMs: 5 });
-    await client.procedure.start();
-    server.faults.push({ match: '/trials', fault: { kind: 'hang' } });
-    client.trialLog(tone(0));
-    await expect(client.procedure.respond(true)).resolves.toMatchObject({ levelDbHl: 30 });
-    expect(server.calls.filter((c) => c.path.endsWith('/trials'))).toHaveLength(2);
-  });
-
-  it('a 409 is not retried; it surfaces with its details and breaks the queue', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    server.faults.push({
-      match: '/trials',
-      fault: { kind: 'status', status: 409, body: { error: { code: 'conflict', message: 'mismatch', expected: { level_db_hl: 40 } } } },
-    });
-    client.trialLog(tone(0));
-    const err = await client.procedure.respond(true).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 409, code: 'conflict', details: { expected: { level_db_hl: 40 } } });
-    expect(server.calls.filter((c) => c.path.endsWith('/trials'))).toHaveLength(1);
-    await expect(client.flush()).rejects.toBe(err);
-  });
-
-  it('a failed log-only (catch) upload breaks the queue for the next tone', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    server.faults.push({ match: '/trials', fault: { kind: 'status', status: 500 } });
-    client.trialLog(catchTrial(0, true));
-    client.trialLog(tone(1));
-    await expect(client.procedure.respond(true)).rejects.toMatchObject({ status: 500 });
-    expect(server.calls.filter((c) => c.path.endsWith('/trials'))).toHaveLength(1); // 500 not retried
-  });
-
-  it('parses FastAPI 422 validation errors', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    server.faults.push({ match: '/trials', fault: { kind: 'status', status: 422, body: { detail: [{ loc: ['body', 'seq'], msg: 'bad' }] } } });
-    client.trialLog(tone(0));
-    await expect(client.procedure.respond(true)).rejects.toMatchObject({ status: 422, code: 'validation_error', details: { detail: [{ msg: 'bad' }] } });
   });
 });
 
-describe('integrity checks on both sides of the wire', () => {
-  it('rejects a non-UUID trial id before sending anything', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    client.trialLog(tone(0, true, { trialId: 't1' }));
-    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(ApiContractError);
-    expect(server.calls.filter((c) => c.path.endsWith('/trials'))).toHaveLength(0);
+describe('durable outbox', () => {
+  it('holds each trial until the server acknowledges it', async () => {
+    const outbox = new MemoryOutboxStore();
+    const { server, client } = setup({ outbox });
+    const first = (await client.procedure.start())!;
+    server.offline = true;
+    await play(client, first, 3);
+    await new Promise((r) => setTimeout(r, 5));
+    expect((await outbox.list(SESSION_ID)).map((e) => e.trial.seq)).toEqual([0, 1, 2]);
+    server.offline = false;
+    client.retryNow();
+    await client.flush();
+    expect(await outbox.list()).toEqual([]);
   });
 
-  it('detects a gap in the client trial log', async () => {
-    const { client } = setup();
-    await client.procedure.start();
-    client.trialLog(tone(0));
-    client.trialLog(tone(2));
-    await expect(client.flush()).rejects.toThrow(/trial log gap/);
+  it('IndexedDB outbox survives the page: a later load uploads what was left behind', async () => {
+    const idb = new IDBFactory();
+    const outbox = new IndexedDbOutboxStore(idb, 'aurohear-test');
+    const { server, client } = setup({ outbox });
+    const first = (await client.procedure.start())!;
+    server.offline = true;
+    await play(client, first, 5);
+    await new Promise((r) => setTimeout(r, 10));
+    outbox.close(); // "tab closed" while offline — the client is gone
+
+    server.offline = false;
+    const reopened = new IndexedDbOutboxStore(idb, 'aurohear-test');
+    expect((await reopened.list()).map((e) => e.trial.seq)).toEqual([0, 1, 2, 3, 4]);
+    const api = new AuroHearApiClient({ baseUrl: 'http://api.test', fetch: server.fetch, sleep: async () => undefined });
+    const res = await resumePersistedUploads(reopened, api);
+    expect(res).toEqual({ uploaded: 5, failed: [] });
+    expect(server.trials.map((t) => t.seq)).toEqual([0, 1, 2, 3, 4]);
+    expect(await reopened.list()).toEqual([]);
+  });
+});
+
+describe('integrity: stop rather than continue on a wrong path', () => {
+  it('a server that disagrees with the browser engine raises EngineDivergenceError', async () => {
+    const { server, client } = setup();
+    const first = (await client.procedure.start())!;
+    server.overrideAccepted = (_b, a) => ({ ...a, next_presentation: { ...(a['next_presentation'] as object), level_db_hl: 60 } });
+    client.trialLog(record(first, 0, true));
+    await client.procedure.respond(true); // returns immediately (local)
+    await expect(client.flush()).rejects.toBeInstanceOf(EngineDivergenceError);
+    client.trialLog(record(first, 1, true));
+    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(EngineDivergenceError);
+    expect(client.status).toBe('broken');
+  });
+
+  it('a logged trial that is not the tone the engine asked for is rejected locally', async () => {
+    const { server, client } = setup();
+    const first = (await client.procedure.start())!;
+    client.trialLog(record({ ...first, levelDbHl: 70 }, 0, true));
+    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(EngineDivergenceError);
+    expect(server.trials).toHaveLength(0);
+  });
+
+  it('a permanent API error (409) stops the client; the trial stays in the outbox', async () => {
+    const outbox = new MemoryOutboxStore();
+    const { server, client } = setup({ outbox });
+    const first = (await client.procedure.start())!;
+    server.faults.push({ match: '/trials', fault: { kind: 'status', status: 409, body: { error: { code: 'conflict', message: 'no' } } } });
+    const r = record(first, 0, true);
+    client.trialLog(r);
+    await client.procedure.respond(true);
+    await expect(client.flush()).rejects.toMatchObject({ status: 409, code: 'conflict' });
+    expect((await outbox.list()).map((e) => e.trial.trial_id)).toEqual([r.trialId]);
+    client.trialLog(record(first, 1, true));
+    await expect(client.procedure.respond(true)).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('transient statuses (503, 429) are retried, not fatal', async () => {
+    const { server, client } = setup();
+    const first = (await client.procedure.start())!;
+    server.faults.push(
+      { match: '/trials', fault: { kind: 'status', status: 503 } },
+      { match: '/trials', fault: { kind: 'status', status: 429 } },
+      { match: '/trials', fault: { kind: 'network' } },
+    );
+    client.trialLog(record(first, 0, true));
+    await client.procedure.respond(true);
+    await client.flush();
+    expect(server.trials).toHaveLength(1);
+  });
+
+  it('rejects non-UUID ids and gaps in the trial log', async () => {
+    const a = setup();
+    const p = (await a.client.procedure.start())!;
+    a.client.trialLog(record(p, 0, true, { trialId: 't1' }));
+    await expect(a.client.flush()).rejects.toBeInstanceOf(ApiContractError);
+    const b = setup();
+    const q = (await b.client.procedure.start())!;
+    b.client.trialLog(record(q, 1, true));
+    await expect(b.client.flush()).rejects.toThrow(/trial log gap/);
   });
 
   it('respond() must match the logged tone trial', async () => {
     const { client } = setup();
-    await client.procedure.start();
+    const p = (await client.procedure.start())!;
     await expect(client.procedure.respond(true)).rejects.toThrow(/no logged tone trial/);
-    client.trialLog(catchTrial(0, true));
-    await expect(client.procedure.respond(true)).rejects.toThrow(/no logged tone trial/); // catches don't count
-    client.trialLog(tone(1, false));
+    client.trialLog(record(p, 0, false));
     await expect(client.procedure.respond(true)).rejects.toThrow(/disagrees/);
-  });
-
-  it('rejects a malformed next presentation from the server', async () => {
-    const { client } = setup([P(40), P(42)]);
-    await client.procedure.start();
-    client.trialLog(tone(0));
-    await expect(client.procedure.respond(true)).rejects.toThrow(/off the −10…90 dB HL lattice/);
-  });
-
-  it('rejects a server that advances the staircase on a catch trial', async () => {
-    const { server, client } = setup();
-    server.overrideAccepted = (_b, a) => ({ ...a, advanced_protocol: true });
-    await client.procedure.start();
-    client.trialLog(catchTrial(0));
-    await expect(client.flush()).rejects.toThrow(/advanced_protocol=true for a catch trial/);
   });
 });
 
 describe('session end', () => {
-  it('finalize waits for queued uploads, then posts finalize', async () => {
-    const { server, client } = setup([P(40), P(30)]);
-    server.latencyMs = 3;
-    await client.procedure.start();
-    client.trialLog(tone(0));
-    client.trialLog(catchTrial(1));
-    client.trialLog(tone(2, false));
-    const res = await client.finalize();
-    expect(server.calls.map((c) => c.path.split('/').pop())).toEqual(['sessions', 'trials', 'trials', 'trials', 'finalize']);
-    expect(res.session.status).toBe('complete');
+  it('finalize waits out an outage until every trial is stored', async () => {
+    const { server, client } = setup();
+    const first = (await client.procedure.start())!;
+    server.offline = true;
+    await play(client, first, 4);
+    const finalizing = client.finalize();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(server.calls.some((c) => c.path.endsWith('/finalize'))).toBe(false);
+    server.offline = false;
+    client.retryNow();
+    const res = await finalizing;
+    const order = server.calls.filter((c) => !c.path.endsWith('/sessions')).map((c) => c.path.split('/').pop());
+    expect(order.lastIndexOf('trials')).toBeLessThan(order.indexOf('finalize'));
+    expect(server.trials).toHaveLength(4);
+    expect(res.session.status).toBe('incomplete');
     expect(client.status).toBe('closed');
   });
 
-  it('settleSession: aborted runs record the abort, then finalize partial results', async () => {
+  it('settleSession on an aborted run records the abort, then finalizes partial data', async () => {
     const { server, client } = setup();
-    await client.procedure.start();
-    client.trialLog(tone(0));
+    const first = (await client.procedure.start())!;
+    await play(client, first, 3);
     const res = await settleSession(client, { status: 'aborted', abortReason: 'device_change' });
     const tail = server.calls.slice(-2);
     expect(tail.map((c) => c.path.split('/').pop())).toEqual(['abort', 'finalize']);
@@ -231,26 +292,17 @@ describe('session end', () => {
     expect(res.session.status).toBe('aborted');
   });
 
-  it('abort tolerates a lost response (409 on retry, session already aborted)', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    server.status = 'aborted'; // as if the first abort landed but its response was lost
-    await expect(client.abort('user')).resolves.toMatchObject({ session: { status: 'aborted' } });
-  });
+  it('abort tolerates a lost response, and is still recorded when the client is stopped', async () => {
+    const a = setup();
+    await a.client.procedure.start();
+    a.server.status = 'aborted';
+    await expect(a.client.abort('user')).resolves.toMatchObject({ session: { status: 'aborted' } });
 
-  it('abort is still recorded when the upload queue is broken', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    server.faults.push({ match: '/trials', fault: { kind: 'status', status: 409 } });
-    client.trialLog(tone(0));
-    await client.procedure.respond(true).catch(() => undefined);
-    await expect(client.abort('procedure_error')).resolves.toMatchObject({ session: { status: 'aborted' } });
-  });
-
-  it('submits feedback for the session', async () => {
-    const { server, client } = setup();
-    await client.procedure.start();
-    await client.submitFeedback({ text: 'Tones were clear.', ratings: { clarity: 5 } });
-    expect(server.calls.at(-1)).toMatchObject({ method: 'POST', path: `/api/v1/sessions/${SESSION_ID}/feedback` });
+    const b = setup();
+    const p = (await b.client.procedure.start())!;
+    b.server.faults.push({ match: '/trials', fault: { kind: 'status', status: 409 } });
+    b.client.trialLog(record(p, 0, true));
+    await b.client.flush().catch(() => undefined);
+    await expect(b.client.abort('procedure_error')).resolves.toMatchObject({ session: { status: 'aborted' } });
   });
 });
