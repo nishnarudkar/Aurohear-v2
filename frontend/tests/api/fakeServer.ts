@@ -102,7 +102,7 @@ export class FakeServer {
       return json(200, { session: this.session(), protocol_complete: true, thresholds: [], audiogram: [], quality_metrics: {}, classification: {} });
     }
     if (method === 'POST' && path.endsWith('/feedback')) {
-      return json(201, { id: 'fb', session_id: SESSION_ID, ...(body as object), insights: [] });
+      return json(201, { id: 'fb', session_id: SESSION_ID, submitted_at: '2026-10-12T00:00:00Z' });
     }
     return json(404, { error: { code: 'not_found', message: path } });
   }

@@ -96,6 +96,17 @@ describe('API contract (openapi.json)', () => {
     expect(new Set(schema('LikelihoodBand').enum)).toEqual(new Set(['low', 'medium', 'high', 'indeterminate']));
   });
 
+  it('the participant feedback response is a receipt only — never NLP output', () => {
+    const post = openapi.paths['/api/v1/sessions/{session_id}/feedback']?.['post'] as {
+      responses: Record<string, { content: { 'application/json': { schema: { $ref: string } } } }>;
+    };
+    const ref = post.responses['201']!.content['application/json'].schema.$ref;
+    expect(ref.endsWith('/FeedbackReceipt')).toBe(true);
+    expect(props('FeedbackReceipt')).toEqual(['id', 'session_id', 'submitted_at']);
+    // Insight endpoints exist but are admin-only (enforced and tested server-side).
+    expect(Object.keys(openapi.paths['/api/v1/sessions/{session_id}/insights'] ?? {})).toContain('get');
+  });
+
   it('SessionCreate accepts the fields the adapter documents', () => {
     expect(props('SessionCreate')).toEqual(
       [

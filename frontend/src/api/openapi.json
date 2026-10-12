@@ -775,6 +775,33 @@
         "title": "FeedbackOut",
         "type": "object"
       },
+      "FeedbackReceipt": {
+        "description": "What the participant gets back: NLP output is never shown to them (NLP doc §Access Control).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "submitted_at"
+        ],
+        "title": "FeedbackReceipt",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -813,8 +840,12 @@
             "type": "string"
           },
           "type": {
-            "maxLength": 64,
-            "minLength": 1,
+            "enum": [
+              "audio_quality",
+              "volume_level",
+              "ui_instructions",
+              "technical_failure"
+            ],
             "title": "Type",
             "type": "string"
           }
@@ -838,6 +869,7 @@
       },
       "NlpInsightCreate": {
         "additionalProperties": false,
+        "description": "An analysis from an external NLP model (admin API). The built-in analyser runs\nautomatically on every feedback submission.",
         "properties": {
           "emotions": {
             "additionalProperties": {
@@ -882,6 +914,19 @@
             "title": "Model Version",
             "type": "string"
           },
+          "polarity": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": -1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polarity"
+          },
           "sentiment": {
             "enum": [
               "positive",
@@ -891,6 +936,26 @@
             ],
             "title": "Sentiment",
             "type": "string"
+          },
+          "subjectivity": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectivity"
+          },
+          "symptoms": {
+            "items": {
+              "$ref": "#/components/schemas/SymptomIn"
+            },
+            "title": "Symptoms",
+            "type": "array"
           },
           "uncertainty": {
             "maximum": 1.0,
@@ -910,6 +975,15 @@
       },
       "NlpInsightOut": {
         "properties": {
+          "correlations": {
+            "description": "Self-report vs audiometry — research annotation only; never affects results",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Correlations",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -965,6 +1039,29 @@
             "title": "Model Version",
             "type": "string"
           },
+          "polarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polarity"
+          },
+          "requires_clinical_review": {
+            "description": "Red-flag topic mentioned: needs human review",
+            "title": "Requires Clinical Review",
+            "type": "boolean"
+          },
+          "review_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Review Reasons",
+            "type": "array"
+          },
           "sentiment": {
             "enum": [
               "positive",
@@ -974,6 +1071,25 @@
             ],
             "title": "Sentiment",
             "type": "string"
+          },
+          "subjectivity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjectivity"
+          },
+          "symptoms": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Symptoms",
+            "type": "array"
           },
           "uncertainty": {
             "title": "Uncertainty",
@@ -990,6 +1106,12 @@
           "uncertainty",
           "issues",
           "intent",
+          "polarity",
+          "subjectivity",
+          "symptoms",
+          "correlations",
+          "requires_clinical_review",
+          "review_reasons",
           "created_at"
         ],
         "title": "NlpInsightOut",
@@ -1380,6 +1502,33 @@
         "title": "SessionCreate",
         "type": "object"
       },
+      "SessionInsightsOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "insights": {
+            "items": {
+              "$ref": "#/components/schemas/NlpInsightOut"
+            },
+            "title": "Insights",
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "count",
+          "insights"
+        ],
+        "title": "SessionInsightsOut",
+        "type": "object"
+      },
       "SessionOut": {
         "properties": {
           "abort_reason": {
@@ -1608,6 +1757,38 @@
         ],
         "title": "SessionStatus",
         "type": "string"
+      },
+      "SymptomIn": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evidence"
+          },
+          "symptom": {
+            "enum": [
+              "unilateral_hearing_loss",
+              "tinnitus",
+              "dizziness_vertigo",
+              "ear_fullness"
+            ],
+            "title": "Symptom",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symptom"
+        ],
+        "title": "SymptomIn",
+        "type": "object"
       },
       "ThresholdResultOut": {
         "properties": {
@@ -2231,7 +2412,7 @@
   "paths": {
     "/api/v1/feedback/{feedback_id}/insights": {
       "post": {
-        "description": "Store a versioned NLP analysis of one feedback entry (append-only).",
+        "description": "Admin: store a versioned analysis from an external NLP model (append-only).",
         "operationId": "add_insight_api_v1_feedback__feedback_id__insights_post",
         "parameters": [
           {
@@ -2242,6 +2423,22 @@
               "format": "uuid",
               "title": "Feedback Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -2279,7 +2476,7 @@
         },
         "summary": "Add Insight",
         "tags": [
-          "feedback"
+          "admin"
         ]
       }
     },
@@ -2425,6 +2622,7 @@
     },
     "/api/v1/sessions/{session_id}/feedback": {
       "get": {
+        "description": "Admin: feedback text with all insights.",
         "operationId": "list_feedback_api_v1_sessions__session_id__feedback_get",
         "parameters": [
           {
@@ -2435,6 +2633,22 @@
               "format": "uuid",
               "title": "Session Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -2466,11 +2680,11 @@
         },
         "summary": "List Feedback",
         "tags": [
-          "feedback"
+          "admin"
         ]
       },
       "post": {
-        "description": "Store the participant's free-text self-report.",
+        "description": "Store the participant's free-text self-report (after the test) and analyse it.\nReturns a receipt only — NLP results are never shown to the participant.",
         "operationId": "create_feedback_api_v1_sessions__session_id__feedback_post",
         "parameters": [
           {
@@ -2499,11 +2713,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FeedbackOut"
+                  "$ref": "#/components/schemas/FeedbackReceipt"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "description": "The test is still in progress (feedback is post-test only)"
           },
           "422": {
             "content": {
@@ -2563,6 +2780,66 @@
         "summary": "Finalize Session",
         "tags": [
           "results"
+        ]
+      }
+    },
+    "/api/v1/sessions/{session_id}/insights": {
+      "get": {
+        "description": "Admin: NLP insights for a session, with the symptom ↔ audiometry correlation\n(a research annotation; it never changes the clinical result).",
+        "operationId": "list_insights_api_v1_sessions__session_id__insights_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInsightsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Insights",
+        "tags": [
+          "admin"
         ]
       }
     },

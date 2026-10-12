@@ -200,12 +200,12 @@ export interface FeedbackCreateDto {
   readonly language?: string | null;
 }
 
+/**
+ * What the participant gets back after submitting feedback. NLP analysis of the text is
+ * admin-only and never returned here (docs/NLP_RELIABILITY_MODULE.md, Access Control).
+ */
 export interface FeedbackDto {
   readonly id: string;
   readonly session_id: string;
-  readonly text: string;
-  readonly ratings: Readonly<Record<string, number>> | null;
-  readonly language: string | null;
   readonly submitted_at: string;
-  readonly insights: readonly unknown[];
 }
