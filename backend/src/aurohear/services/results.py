@@ -113,6 +113,9 @@ def _quality_row(
     # QUALIND #7 over every search that could be probed at threshold + 5 dB.
     probed = [t for t in thresholds if t.qc_probe_pass is not None]
     probe_failures = sum(not t.qc_probe_pass for t in probed)
+    # Spec §10 #10 / §5.3.2: every noise interruption is a discarded trial with this reason.
+    ambient = sum(t.discarded and t.discard_reason == "ambient_noise" for t in trials)
+    hidden = sum(t.discarded and t.discard_reason == "visibility_hidden" for t in trials)
     return QualityMetricsRow(
         session_id=session_id,
         tone_trials=len(tones),
@@ -133,6 +136,9 @@ def _quality_row(
         qc_probes=len(probed),
         qc_probe_failures=probe_failures,
         qc_probe_fail_rate=probe_failures / len(probed) if probed else None,
+        ambient_noise_discards=ambient,
+        visibility_discards=hidden,
+        ambient_exceedance_rate=ambient / len(trials) if trials else None,
         protocol_complete=protocol_complete,
     )
 
@@ -222,6 +228,7 @@ def _classify(
         discarded_trials=quality.discarded_trials,
         tone_trials=quality.tone_trials,
         qc_probe_fail_rate=quality.qc_probe_fail_rate,
+        ambient_exceedance_rate=quality.ambient_exceedance_rate,
     )
     tier = CalibrationTier(row.calibration["tier"])
     # Intake (red flags, noise exposure, difficulty in noise) is not collected yet.

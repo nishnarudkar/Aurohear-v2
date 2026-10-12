@@ -72,6 +72,9 @@ class QualityMetricsOut(OutputModel):
     qc_probe_fail_rate: float | None = Field(
         description="QUALIND #7: non-responses at threshold + 5 dB ÷ thresholds probed"
     )
+    ambient_noise_discards: int = Field(description="Trials discarded for ambient noise (spec §5.3.2)")
+    visibility_discards: int = Field(description="Trials discarded because the page lost focus (spec §4.1)")
+    ambient_exceedance_rate: float | None = Field(description="Spec §10 #10: noise-interrupted ÷ all trials")
     protocol_complete: bool
     computed_at: datetime
 

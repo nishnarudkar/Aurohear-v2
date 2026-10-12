@@ -4,16 +4,18 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import (
     AwareDatetime,
     Field,
+    StrictBool,
     StrictFloat,
     StrictInt,
     StrictStr,
     field_validator,
+    model_validator,
 )
 
 import math
@@ -70,10 +72,28 @@ class CalibrationInfo(InputModel):
 
 
 class EnvironmentInfo(InputModel):
-    pretest_dba: StrictFloat | None = None
+    """Pre-test ambient measurement, stored with the session (spec §5.3.4)."""
+
+    level_reference: Literal["db_spl", "relative"] | None = Field(
+        default=None,
+        description="db_spl: calibrated microphone; relative: uncalibrated mic, change detection only (§5.3.3)",
+    )
+    pretest_dba: StrictFloat | None = Field(default=None, description="Only when level_reference is db_spl")
     pretest_third_octave: dict[str, StrictFloat] | None = None
+    uncertainty_db: StrictFloat | None = Field(default=None, ge=0)
+    pretest_fluctuation_db: StrictFloat | None = Field(default=None, ge=0)
+    microphone_processing_off: StrictBool | None = Field(
+        default=None, description="Echo cancellation, AGC and noise suppression confirmed off (§4.1)"
+    )
     mpanl_table: StrictStr | None = Field(default=None, max_length=128)
     test_floor_db: StrictFloat | None = None
+
+    @model_validator(mode="after")
+    def _honest_levels(self) -> Self:
+        # An uncalibrated microphone cannot know an absolute level (spec §5.3.3).
+        if self.level_reference == "relative" and self.pretest_dba is not None:
+            raise ValueError("pretest_dba requires a calibrated microphone (level_reference 'db_spl')")
+        return self
 
 
 class SessionCreate(InputModel):

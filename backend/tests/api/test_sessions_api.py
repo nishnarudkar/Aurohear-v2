@@ -446,3 +446,64 @@ def test_per_frequency_caps_are_enforced_server_side(client: TestClient) -> None
 )
 def test_frequency_caps_validation(client: TestClient, caps: dict[str, Any]) -> None:
     assert client.post(f"{API}/sessions", json=session_body(frequency_caps_db_hl=caps)).status_code == 422
+
+
+# ------------------------------------------------------------------ Prompt 6: environment and interruptions
+
+
+RELATIVE_ENV = {
+    "level_reference": "relative",
+    "pretest_third_octave": {"250": -92.1, "1000": -97.4},
+    "uncertainty_db": 8.0,
+    "pretest_fluctuation_db": 3.2,
+    "microphone_processing_off": True,
+}
+
+
+def test_environment_is_stored_and_relative_mode_cannot_claim_dba(client: TestClient) -> None:
+    sim = SimClient.start(client, environment=RELATIVE_ENV)
+    stored = client.get(f"{API}/sessions/{sim.session_id}").json()["session"]["environment"]
+    assert stored["level_reference"] == "relative" and stored["uncertainty_db"] == 8.0
+    bad = session_body(environment={**RELATIVE_ENV, "pretest_dba": 31.0})
+    assert client.post(f"{API}/sessions", json=bad).status_code == 422
+    ok = session_body(environment={**RELATIVE_ENV, "level_reference": "db_spl", "pretest_dba": 31.0})
+    assert client.post(f"{API}/sessions", json=ok).status_code == 201
+
+
+def test_noise_and_visibility_interruptions_are_counted(client: TestClient) -> None:
+    sim = SimClient.start(client)
+    listener = threshold_listener(flat_all(20))
+    noise_at, hidden_at = {3, 9, 15}, {6}
+    i = 0
+    while sim.next_presentation is not None:
+        p = sim.next_presentation
+        if i in noise_at or i in hidden_at:
+            reason = "ambient_noise" if i in noise_at else "visibility_hidden"
+            assert sim.post(sim.trial_body(p, responded=False, discard_reason=reason)).status_code == 200
+            i += 1
+        assert sim.post(sim.trial_body(p, responded=listener(p))).status_code == 200
+        i += 1
+    q = sim.finalize()["quality_metrics"]
+    assert (q["ambient_noise_discards"], q["visibility_discards"]) == (3, 1)
+    assert q["ambient_exceedance_rate"] == pytest.approx(3 / len(sim.posted))
+    assert q["ambient_exceedance_rate"] < 0.15
+
+
+def test_noise_on_more_than_15_percent_of_trials_is_indeterminate(client: TestClient) -> None:
+    """Spec §9.2 Step 4: ambient noise limit exceeded on > 15 % of trials → Indeterminate."""
+    sim = SimClient.start(client)
+    listener = threshold_listener(flat_all(20))
+    i = 0
+    while sim.next_presentation is not None:
+        p = sim.next_presentation
+        if i % 4 == 0:  # every 4th presentation is interrupted by noise (~20 %)
+            assert sim.post(sim.trial_body(p, responded=False, discard_reason="ambient_noise")).status_code == 200
+            i += 1
+        assert sim.post(sim.trial_body(p, responded=listener(p))).status_code == 200
+        i += 1
+    res = sim.finalize()
+    assert res["quality_metrics"]["ambient_exceedance_rate"] > 0.15
+    c = res["classification"]
+    assert c["band"] == "indeterminate" and c["p_hearing_loss"] is None
+    assert "ambient noise over limit" in " ".join(o["reason"] for o in c["overrides_applied"])
+    assert audiogram_of(res)["right"][1000] == 20  # thresholds themselves are unaffected

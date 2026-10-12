@@ -237,6 +237,9 @@ class QualityMetricsRow(Base):
     qc_probes: Mapped[int] = mapped_column(Integer, server_default="0")
     qc_probe_failures: Mapped[int] = mapped_column(Integer, server_default="0")
     qc_probe_fail_rate: Mapped[float | None] = mapped_column(Float)
+    ambient_noise_discards: Mapped[int] = mapped_column(Integer, server_default="0")
+    visibility_discards: Mapped[int] = mapped_column(Integer, server_default="0")
+    ambient_exceedance_rate: Mapped[float | None] = mapped_column(Float)
     protocol_complete: Mapped[bool] = mapped_column(Boolean)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -246,6 +249,10 @@ class QualityMetricsRow(Base):
         CheckConstraint(
             "false_positive_rate IS NULL OR (false_positive_rate >= 0 AND false_positive_rate <= 1)",
             name="fp_rate_range",
+        ),
+        CheckConstraint(
+            "ambient_exceedance_rate IS NULL OR (ambient_exceedance_rate >= 0 AND ambient_exceedance_rate <= 1)",
+            name="ambient_rate_range",
         ),
     )
 
