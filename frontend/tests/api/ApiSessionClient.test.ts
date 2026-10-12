@@ -179,7 +179,7 @@ describe('durable outbox', () => {
     const first = (await client.procedure.start())!;
     server.offline = true;
     await play(client, first, 5);
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setTimeout(r, 100));
     outbox.close(); // "tab closed" while offline — the client is gone
 
     server.offline = false;

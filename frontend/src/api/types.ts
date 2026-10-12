@@ -29,8 +29,14 @@ export interface CalibrationInfoDto {
 }
 
 export interface EnvironmentInfoDto {
+  /** 'relative' = uncalibrated microphone, change detection only (spec §5.3.3). */
+  readonly level_reference?: 'db_spl' | 'relative' | null;
+  /** Only with a calibrated microphone (the server rejects it in relative mode). */
   readonly pretest_dba?: number | null;
   readonly pretest_third_octave?: Readonly<Record<string, number>> | null;
+  readonly uncertainty_db?: number | null;
+  readonly pretest_fluctuation_db?: number | null;
+  readonly microphone_processing_off?: boolean | null;
   readonly mpanl_table?: string | null;
   readonly test_floor_db?: number | null;
 }
