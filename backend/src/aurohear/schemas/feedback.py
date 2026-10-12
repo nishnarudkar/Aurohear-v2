@@ -17,6 +17,8 @@ from pydantic import Field, StrictFloat, StrictInt, StrictStr, model_validator
 from .common import InputModel, OutputModel
 
 Sentiment = Literal["positive", "negative", "neutral", "mixed"]
+SymptomName = Literal["unilateral_hearing_loss", "tinnitus", "dizziness_vertigo", "ear_fullness"]
+IssueType = Literal["audio_quality", "volume_level", "ui_instructions", "technical_failure"]
 Intent = Literal["complaint", "suggestion", "praise", "question"]
 Severity = Literal["low", "medium", "high"]
 
@@ -38,12 +40,20 @@ class FeedbackCreate(InputModel):
 
 
 class Issue(InputModel):
-    type: StrictStr = Field(min_length=1, max_length=64)
+    type: IssueType
     severity: Severity
     evidence: StrictStr | None = Field(default=None, max_length=500)
 
 
+class SymptomIn(InputModel):
+    symptom: SymptomName
+    evidence: StrictStr | None = Field(default=None, max_length=500)
+
+
 class NlpInsightCreate(InputModel):
+    """An analysis from an external NLP model (admin API). The built-in analyser runs
+    automatically on every feedback submission."""
+
     model_name: StrictStr = Field(min_length=1, max_length=128)
     model_version: StrictStr = Field(min_length=1, max_length=64)
     sentiment: Sentiment
@@ -51,6 +61,9 @@ class NlpInsightCreate(InputModel):
     uncertainty: StrictFloat = Field(ge=0, le=1)
     issues: list[Issue] = Field(default_factory=list)
     intent: Intent | None = None
+    polarity: StrictFloat | None = Field(default=None, ge=-1, le=1)
+    subjectivity: StrictFloat | None = Field(default=None, ge=0, le=1)
+    symptoms: list[SymptomIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _emotion_scores(self) -> Self:
@@ -69,7 +82,29 @@ class NlpInsightOut(OutputModel):
     uncertainty: float
     issues: list[dict[str, object]]
     intent: Intent | None
+    polarity: float | None
+    subjectivity: float | None
+    symptoms: list[dict[str, object]]
+    correlations: list[dict[str, object]] = Field(
+        description="Self-report vs audiometry — research annotation only; never affects results"
+    )
+    requires_clinical_review: bool = Field(description="Red-flag topic mentioned: needs human review")
+    review_reasons: list[str]
     created_at: datetime
+
+
+class FeedbackReceipt(OutputModel):
+    """What the participant gets back: NLP output is never shown to them (NLP doc §Access Control)."""
+
+    id: UUID
+    session_id: UUID
+    submitted_at: datetime
+
+
+class SessionInsightsOut(OutputModel):
+    session_id: UUID
+    count: int
+    insights: list[NlpInsightOut]
 
 
 class FeedbackOut(OutputModel):

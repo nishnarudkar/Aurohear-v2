@@ -34,6 +34,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     false,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -326,6 +327,13 @@ class NlpInsightRow(Base):
     uncertainty: Mapped[float] = mapped_column(Float)
     issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     intent: Mapped[str | None] = mapped_column(String(16))
+    polarity: Mapped[float | None] = mapped_column(Float)
+    subjectivity: Mapped[float | None] = mapped_column(Float)
+    symptoms: Mapped[list[dict[str, Any]]] = mapped_column(JSON, server_default=text("'[]'"))
+    #: Research annotation only — never read by the audiometric pipeline.
+    correlations: Mapped[list[dict[str, Any]]] = mapped_column(JSON, server_default=text("'[]'"))
+    requires_clinical_review: Mapped[bool] = mapped_column(Boolean, server_default=false(), index=True)
+    review_reasons: Mapped[list[str]] = mapped_column(JSON, server_default=text("'[]'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     feedback: Mapped[FeedbackRow] = relationship(back_populates="insights")
@@ -337,4 +345,6 @@ class NlpInsightRow(Base):
             "intent IS NULL OR intent IN ('complaint', 'suggestion', 'praise', 'question')",
             name="intent",
         ),
+        CheckConstraint("polarity IS NULL OR (polarity >= -1 AND polarity <= 1)", name="polarity_range"),
+        CheckConstraint("subjectivity IS NULL OR (subjectivity >= 0 AND subjectivity <= 1)", name="subjectivity_range"),
     )

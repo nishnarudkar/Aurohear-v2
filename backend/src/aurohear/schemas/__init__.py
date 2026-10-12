@@ -1,4 +1,4 @@
-from .feedback import FeedbackCreate, FeedbackOut, NlpInsightCreate, NlpInsightOut
+from .feedback import FeedbackCreate, FeedbackOut, FeedbackReceipt, NlpInsightCreate, NlpInsightOut, SessionInsightsOut
 from .results import ClassificationOut, QualityMetricsOut, SessionResults, ThresholdResultOut
 from .session import (
     AbortReason,
@@ -17,11 +17,13 @@ __all__ = [
     "ClassificationOut",
     "FeedbackCreate",
     "FeedbackOut",
+    "FeedbackReceipt",
     "NlpInsightCreate",
     "NlpInsightOut",
     "PresentationOut",
     "QualityMetricsOut",
     "SessionCreate",
+    "SessionInsightsOut",
     "SessionOut",
     "SessionResults",
     "SessionState",
