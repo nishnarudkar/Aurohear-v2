@@ -71,11 +71,41 @@ export interface Rendered {
  * Render tones through the real Web Audio graph offline.
  * `actions` runs before rendering; `at` callbacks run at suspend points mid-render.
  */
+/** Thrown when the offline renderer itself misbehaves (never for an engine failure). */
+export class RendererDefect extends Error {}
+
+/**
+ * node-web-audio-api occasionally finishes an offline render without honouring a
+ * scheduled suspend(t) (observed ~1 in 8 full-suite runs under load: the suspend
+ * promise neither resolves nor rejects before rendering ends). That is a defect of the
+ * test renderer, not of our engine — the mid-render action simply never ran. Only that
+ * specific defect is retried; any engine assertion failure is never retried.
+ */
+const RENDER_ATTEMPTS = 3;
+
 export async function render(
   seconds: number,
   actions: (engine: ToneStimulusEngine) => ScheduledTone[],
   opts: Partial<ToneStimulusEngineOptions> = {},
   at: ReadonlyArray<{ time: number; run: (tones: ScheduledTone[]) => void }> = [],
+): Promise<Rendered> {
+  let lastDefect: RendererDefect | null = null;
+  for (let attempt = 1; attempt <= RENDER_ATTEMPTS; attempt++) {
+    try {
+      return await renderOnce(seconds, actions, opts, at);
+    } catch (e) {
+      if (!(e instanceof RendererDefect)) throw e;
+      lastDefect = e;
+    }
+  }
+  throw lastDefect!;
+}
+
+async function renderOnce(
+  seconds: number,
+  actions: (engine: ToneStimulusEngine) => ScheduledTone[],
+  opts: Partial<ToneStimulusEngineOptions>,
+  at: ReadonlyArray<{ time: number; run: (tones: ScheduledTone[]) => void }>,
 ): Promise<Rendered> {
   const ctx = new OfflineAudioContext(2, Math.ceil(seconds * SAMPLE_RATE), SAMPLE_RATE);
   const engine = new ToneStimulusEngine(ctx, {
@@ -84,8 +114,8 @@ export async function render(
     ...opts,
   });
   const tones = actions(engine);
-  // Suspend points are harness machinery: if one is rejected or never runs, fail with
-  // that diagnosis rather than letting an engine assertion fail misleadingly.
+  // Suspend points are harness machinery: if one is rejected or never runs, report a
+  // RendererDefect rather than letting an engine assertion fail misleadingly.
   const ran: boolean[] = at.map(() => false);
   const errors: unknown[] = [];
   at.forEach(({ time, run }, i) => {
@@ -100,7 +130,7 @@ export async function render(
   });
   const buf = await ctx.startRendering();
   if (errors.length || ran.some((r) => !r)) {
-    throw new Error(
+    throw new RendererDefect(
       `offline render harness: suspend points ran=${JSON.stringify(ran)} errors=${errors.map(String).join('; ')}`,
     );
   }

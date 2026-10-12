@@ -43,6 +43,7 @@ yarn-error.log
 claude.md
 CLAUDE.md
 claude.md.txt
+.claude/
 
 # Testing
 .pytest_cache/
