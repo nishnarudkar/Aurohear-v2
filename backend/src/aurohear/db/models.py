@@ -33,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -57,6 +58,7 @@ class SessionRow(Base):
     supervision: Mapped[str] = mapped_column(String(16))
     better_ear: Mapped[str | None] = mapped_column(String(8))
     profile_cap_db_hl: Mapped[int] = mapped_column(Integer)
+    frequency_caps_db_hl: Mapped[dict[str, float] | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(16), index=True)
     abort_reason: Mapped[str | None] = mapped_column(String(32))
     client_time_origin_ms: Mapped[float | None] = mapped_column(Float)
@@ -179,6 +181,10 @@ class ThresholdResultRow(Base):
     clamp_events: Mapped[int] = mapped_column(Integer)
     is_accepted: Mapped[bool] = mapped_column(Boolean)
     possible_shadow: Mapped[bool] = mapped_column(Boolean)
+    is_interoctave: Mapped[bool] = mapped_column(Boolean, server_default=false())
+    qc_probe_at_threshold_heard: Mapped[bool | None] = mapped_column(Boolean)
+    qc_probe_plus5_heard: Mapped[bool | None] = mapped_column(Boolean)
+    qc_probe_pass: Mapped[bool | None] = mapped_column(Boolean)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     session: Mapped[SessionRow] = relationship(back_populates="thresholds")
@@ -193,6 +199,16 @@ class ThresholdResultRow(Base):
         CheckConstraint(
             "status <> 'measured' OR (ascending_hits >= 2 AND 2 * ascending_hits >= ascending_trials)",
             name="hughson_westlake_criterion",
+        ),
+        # Only a measured threshold can be probed; pass status is the +5 dB response.
+        CheckConstraint(
+            "status = 'measured' OR (qc_probe_at_threshold_heard IS NULL AND qc_probe_plus5_heard IS NULL)",
+            name="probe_needs_threshold",
+        ),
+        CheckConstraint(
+            "(qc_probe_pass IS NULL AND qc_probe_plus5_heard IS NULL) OR "
+            "(qc_probe_pass IS NOT NULL AND qc_probe_plus5_heard IS NOT NULL AND qc_probe_pass = qc_probe_plus5_heard)",
+            name="probe_pass_definition",
         ),
     )
 
@@ -218,6 +234,9 @@ class QualityMetricsRow(Base):
     unresolved_thresholds: Mapped[int] = mapped_column(Integer)
     no_response_thresholds: Mapped[int] = mapped_column(Integer)
     possible_shadow_count: Mapped[int] = mapped_column(Integer)
+    qc_probes: Mapped[int] = mapped_column(Integer, server_default="0")
+    qc_probe_failures: Mapped[int] = mapped_column(Integer, server_default="0")
+    qc_probe_fail_rate: Mapped[float | None] = mapped_column(Float)
     protocol_complete: Mapped[bool] = mapped_column(Boolean)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
