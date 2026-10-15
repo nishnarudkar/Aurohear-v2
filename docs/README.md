@@ -1,3 +1,5 @@
+> **Legacy (v1) document.** It describes the v1 Flask/Supabase prototype and does not apply to AuroHear v2. For v2 see the root `README.md` and `docs/DEPLOYMENT.md`; v2 creates its tables with Alembic migrations (`backend/migrations/`).
+
 # AuroHear
 
 **Professional web-based hearing asymmetry screening platform**
